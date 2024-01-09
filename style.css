@@ -2,8 +2,8 @@ body,
 html {
     height: 100%;
     margin: 0;
-    font-family: Arial, sans-serif;
-    background-color: #cac2fc;
+    font-family: sans-serif;
+    background-color: #c0b6ff;
     color: white;
     display: flex;
     justify-content: center;
@@ -15,8 +15,8 @@ html {
 }
 
 .profile-img {
-    width: 150px;
-    height: 150px;
+    width: 175px;
+    height: 200px;
     /* border-radius: 50%;
     margin-bottom: 20px; */
 }
