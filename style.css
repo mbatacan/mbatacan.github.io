@@ -1,8 +1,7 @@
 body,
 html {
     height: 100%;
-    margin: 0;
-    font-family: monospace;
+    font-family: "Courier Prime", monospace;
     background-color: #222a68;
     color: white;
     display: flex;
@@ -19,11 +18,18 @@ html {
     height: auto;
 }
 
+.name {
+    font-size: 24px;
+    font-weight: bold;
+    color: white;
+    margin: 20px;
+    margin-bottom: 0px;
+}
+
 .social-links-container {
     /* Style your social media icons here */
-    display: flex;
+    display: inline-flex;
     justify-content: center;
-    padding: 10px;
 }
 
 .linkedin-icon,
