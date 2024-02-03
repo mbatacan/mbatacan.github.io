@@ -4,27 +4,82 @@ html {
     font-family: "Courier Prime", monospace;
     background-color: #222a68;
     color: white;
-    display: flex;
     justify-content: center;
-    align-items: center;
-}
-
-.blog-container {
-    font-size: 16px;
-}
-
-.title {
-    font-size: 32px;
-    font-weight: bold;
     text-align: center;
+}
+
+.blog-page {
+    width: 500px;
+    height: auto;
+    display: block;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 10px;
+}
+
+
+.profile-container {
+    text-align: center;
+    justify-content: center;
+    border-bottom: 2px white solid;
+    margin-bottom: 10px;
+}
+
+.profile-img {
+    width: 150px;
+    height: auto;
+}
+
+.social-links-container {
+    /* Style your social media icons here */
+    display: inline-flex;
+    justify-content: center;
+}
+
+.linkedin-icon,
+.github-icon,
+.email-icon {
+    width: 25px;
+    height: auto;
+    margin: 20px;
 }
 
 .subtitle {
-    font-size: 24px;
+    font-size: 12px;
     text-align: center;
+    color: #8fb8de;
+    margin-bottom: 20px;
 
 }
 
-ul {
-    list-style-type: none;
+
+.blog-posts {
+    font-size: 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-content: center;
+}
+
+
+.blog-link {
+    text-decoration: underline;
+    margin: 15px
+}
+
+footer {
+    margin-top: 20px;
+    border-top: 2px solid white;
+}
+
+p {
+    text-align: center;
+}
+
+a.nav-link {
+    text-decoration: underline;
+    color: white;
+
 }

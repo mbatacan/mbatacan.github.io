@@ -4,14 +4,14 @@ html {
     font-family: "Courier Prime", monospace;
     background-color: #222a68;
     color: white;
-    display: flex;
     justify-content: center;
-    align-items: center;
+    text-align: center;
 }
 
 .container {
     display: block;
     margin: 15px;
+
 }
 
 .about-me-title {
@@ -40,7 +40,9 @@ a.nav-link:active {
 }
 
 .photo-grid {
-    display: flex;
+    display: inline-flex;
     width: 150px;
     height: 150px;
+    gap: 9px;
+    justify-content: center;
 }
