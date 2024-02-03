@@ -4,8 +4,6 @@ html {
     font-family: "Courier Prime", monospace;
     background-color: #222a68;
     color: white;
-    justify-content: center;
-    text-align: center;
 }
 
 .blog-page {
@@ -72,6 +70,7 @@ html {
 footer {
     margin-top: 20px;
     border-top: 2px solid white;
+    text-align: center;
 }
 
 p {
@@ -81,5 +80,5 @@ p {
 a.nav-link {
     text-decoration: underline;
     color: white;
-
+    text-align: center;
 }
