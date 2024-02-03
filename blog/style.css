@@ -1,0 +1,30 @@
+body,
+html {
+    height: 100%;
+    font-family: "Courier Prime", monospace;
+    background-color: #222a68;
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.blog-container {
+    font-size: 16px;
+}
+
+.title {
+    font-size: 32px;
+    font-weight: bold;
+    text-align: center;
+}
+
+.subtitle {
+    font-size: 24px;
+    text-align: center;
+
+}
+
+ul {
+    list-style-type: none;
+}
