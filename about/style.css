@@ -4,14 +4,43 @@ html {
     font-family: "Courier Prime", monospace;
     background-color: #222a68;
     color: white;
-    justify-content: center;
+
     text-align: center;
 }
 
-.container {
-    display: block;
-    margin: 15px;
+.about-page {
+    display: flex;
+    flex-direction: column;
+    width: 500px;
+    justify-content: center;
+    margin: auto;
+    align-content: center;
+}
 
+.profile-container {
+    text-align: center;
+    justify-content: center;
+    border-bottom: 2px white solid;
+    margin-bottom: 10px;
+}
+
+.profile-img {
+    width: 150px;
+    height: auto;
+}
+
+.social-links-container {
+    /* Style your social media icons here */
+    display: flex;
+    justify-content: center;
+}
+
+.linkedin-icon,
+.github-icon,
+.email-icon {
+    width: 25px;
+    height: auto;
+    margin: 20px;
 }
 
 .about-me-title {
@@ -40,9 +69,12 @@ a.nav-link:active {
 }
 
 .photo-grid {
-    display: inline-flex;
-    width: 150px;
-    height: 150px;
-    gap: 9px;
+    display: flex;
+    gap: 10px;
     justify-content: center;
+    align-content: center;
+}
+
+img {
+    height: 100px;
 }
