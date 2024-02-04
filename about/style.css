@@ -78,3 +78,9 @@ a.nav-link:active {
 img {
     height: 100px;
 }
+
+footer {
+    border-top: 2px white solid;
+    margin-top: 20px;
+    padding: 5px;
+}
