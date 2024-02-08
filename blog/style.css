@@ -26,8 +26,10 @@ html {
 }
 
 .profile-img {
-    width: 150px;
-    height: auto;
+    object-fit: cover;
+    object-position: 0px -65px;
+    width: 250px;
+    height: 250px;
 }
 
 .social-links-container {
