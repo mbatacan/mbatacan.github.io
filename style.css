@@ -14,8 +14,10 @@ html {
 }
 
 .profile-img {
+    object-fit: cover;
+    object-position: 0px -65px;
     width: 250px;
-    height: auto;
+    height: 250px;
 }
 
 .name {
