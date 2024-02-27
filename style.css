@@ -67,7 +67,7 @@ footer {
     text-align: center;
     border-radius: 6px;
     padding: 5px 0;
-    white-space: ;
+    white-space: nowrap;
 
     /* Position the tooltip */
     position: absolute;
