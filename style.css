@@ -39,7 +39,7 @@ html {
 .email-icon {
     width: 25px;
     height: auto;
-    margin: 20px;
+    margin: 0 10px 25px;
 }
 
 
@@ -54,31 +54,38 @@ footer {
     border-top: 2px solid white;
 }
 
-.email-icon-container {
+.icon-container {
     position: relative;
     display: inline-block;
-    /* Make sure the container has the same size as the icon */
+    margin: 5%;
 }
 
-.email-tooltip {
+.icon-tooltip {
     visibility: hidden;
     background-color: black;
     color: white;
     text-align: center;
     border-radius: 6px;
     padding: 5px 0;
+    white-space: ;
 
     /* Position the tooltip */
     position: absolute;
     z-index: 1;
-    bottom: -10px;
-    /* Adjust this value to position the tooltip below the icon */
-    left: 60%;
+    bottom: -10%;
+    /* Adjust if necessary */
+    left: 50%;
     transform: translateX(-50%);
 
     /* Fade in tooltip */
     opacity: 0;
     transition: opacity 0.3s;
+}
+
+.linkedin-icon-container:hover .linkedin-tooltip,
+.github-icon-container:hover .github-tooltip {
+    visibility: visible;
+    opacity: 1;
 }
 
 .email-icon-container:hover .email-tooltip {
