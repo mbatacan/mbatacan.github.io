@@ -60,13 +60,14 @@ html {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    align-content: center;
 }
 
 
+
 .blog-link {
-    text-decoration: underline;
-    margin: 15px
+    margin: 20 px;
+    padding: 20px;
+    color: white;
 }
 
 footer {
@@ -83,4 +84,9 @@ a.nav-link {
     text-decoration: underline;
     color: white;
     text-align: center;
+}
+
+a.blog-link.nav-link {
+    text-align: left;
+    text-decoration: none;
 }
