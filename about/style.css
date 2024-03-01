@@ -29,6 +29,7 @@ html {
     object-position: 0px -65px;
     width: 250px;
     height: 250px;
+    border-radius: 50%;
 }
 
 .social-links-container {
