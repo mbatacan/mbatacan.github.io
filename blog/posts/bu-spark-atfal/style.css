@@ -20,6 +20,8 @@ html {
 .profile-container {
     text-align: center;
     justify-content: center;
+    border-bottom: 2px white solid;
+    margin-bottom: 10px;
 }
 
 .profile-img {
@@ -34,8 +36,6 @@ html {
     /* Style your social media icons here */
     display: flex;
     justify-content: center;
-    border-bottom: 2px white solid;
-    margin-bottom: 5px;
 }
 
 .linkedin-icon,
@@ -43,7 +43,7 @@ html {
 .email-icon {
     width: 25px;
     height: auto;
-    margin: 10px;
+    margin: 20px;
 }
 
 .about-me-title {
@@ -86,43 +86,4 @@ footer {
     border-top: 2px white solid;
     margin-top: 20px;
     padding: 5px;
-}
-
-.icon-container {
-    position: relative;
-    display: inline-block;
-    margin: 5%;
-}
-
-.icon-tooltip {
-    visibility: hidden;
-    background-color: black;
-    color: white;
-    text-align: center;
-    border-radius: 6px;
-    padding: 5px 0;
-    white-space: nowrap;
-
-    /* Position the tooltip */
-    position: absolute;
-    z-index: 1;
-    bottom: -10%;
-    /* Adjust if necessary */
-    left: 50%;
-    transform: translateX(-50%);
-
-    /* Fade in tooltip */
-    opacity: 0;
-    transition: opacity 0.3s;
-}
-
-.linkedin-icon-container:hover .linkedin-tooltip,
-.github-icon-container:hover .github-tooltip {
-    visibility: visible;
-    opacity: 1;
-}
-
-.email-icon-container:hover .email-tooltip {
-    visibility: visible;
-    opacity: 1;
 }
