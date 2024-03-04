@@ -3,6 +3,9 @@ portfolio website
 working on basic html and css
 
 
+TODO
+Add blog post information
+
 links to add for blog-posts:
 https://www.bu.edu/spark/2023/05/10/demo-day-2023/
 
