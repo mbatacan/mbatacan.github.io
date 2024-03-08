@@ -4,11 +4,10 @@ html {
     font-family: "Courier Prime", monospace;
     background-color: #222a68;
     color: white;
-
     text-align: center;
 }
 
-.about-page {
+.blog-page {
     display: flex;
     flex-direction: column;
     width: 500px;
@@ -20,9 +19,15 @@ html {
 .profile-container {
     text-align: center;
     justify-content: center;
-    border-bottom: 2px white solid;
-    margin-bottom: 10px;
 }
+
+.blog-page a {
+    color: white;
+    text-decoration: underline;
+    margin: 0 10px;
+}
+
+
 
 .profile-img {
     object-fit: cover;
@@ -36,6 +41,8 @@ html {
     /* Style your social media icons here */
     display: flex;
     justify-content: center;
+    border-bottom: 2px white solid;
+    margin-bottom: 5px;
 }
 
 .linkedin-icon,
@@ -43,7 +50,7 @@ html {
 .email-icon {
     width: 25px;
     height: auto;
-    margin: 20px;
+    margin: 10px;
 }
 
 .about-me-title {
@@ -71,13 +78,6 @@ a.nav-link:active {
     text-decoration: underline;
 }
 
-.photo-grid {
-    display: flex;
-    gap: 10px;
-    justify-content: center;
-    align-content: center;
-}
-
 img {
     height: 100px;
 }
@@ -85,5 +85,45 @@ img {
 footer {
     border-top: 2px white solid;
     margin-top: 20px;
+    margin-bottom: 20px;
     padding: 5px;
+}
+
+.icon-container {
+    position: relative;
+    display: inline-block;
+    margin: 5%;
+}
+
+.icon-tooltip {
+    visibility: hidden;
+    background-color: black;
+    color: white;
+    text-align: center;
+    border-radius: 6px;
+    padding: 5px 0;
+    white-space: nowrap;
+
+    /* Position the tooltip */
+    position: absolute;
+    z-index: 1;
+    bottom: -10%;
+    /* Adjust if necessary */
+    left: 50%;
+    transform: translateX(-50%);
+
+    /* Fade in tooltip */
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.linkedin-icon-container:hover .linkedin-tooltip,
+.github-icon-container:hover .github-tooltip {
+    visibility: visible;
+    opacity: 1;
+}
+
+.email-icon-container:hover .email-tooltip {
+    visibility: visible;
+    opacity: 1;
 }

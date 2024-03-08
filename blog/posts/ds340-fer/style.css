@@ -4,29 +4,18 @@ html {
     font-family: "Courier Prime", monospace;
     background-color: #222a68;
     color: white;
-    text-align: center;
-}
-
-.name {
-    font-size: 24px;
-    font-weight: bold;
-    color: white;
-    margin: 20px;
-    margin-bottom: 0px;
-}
-
-.about-page {
     display: flex;
-    flex-direction: column;
-    width: 500px;
     justify-content: center;
-    margin: auto;
-    align-content: center;
+    align-items: center;
 }
 
-.profile-container {
+.container {
     text-align: center;
-    justify-content: center;
+}
+
+.blog-text {
+    border-top: 2px solid white;
+    padding: 10%;
 }
 
 .profile-img {
@@ -37,12 +26,18 @@ html {
     border-radius: 50%;
 }
 
+.name {
+    font-size: 24px;
+    font-weight: bold;
+    color: white;
+    margin: 20px;
+    margin-bottom: 0px;
+}
+
 .social-links-container {
     /* Style your social media icons here */
-    display: flex;
+    display: inline-flex;
     justify-content: center;
-    border-bottom: 2px white solid;
-    margin-bottom: 5px;
 }
 
 .linkedin-icon,
@@ -50,50 +45,19 @@ html {
 .email-icon {
     width: 25px;
     height: auto;
-    margin: 10px;
+    margin: 0 10px 25px;
 }
 
-.about-me-title {
-    text-align: center;
-    font-size: 32px;
-}
 
-a.nav-link:link {
-    color: #ffffff;
-    text-decoration: underline;
-}
-
-a.nav-link:visited {
-    color: #ffffff;
-    text-decoration: underline;
-}
-
-a.nav-link:hover {
-    color: #ffffff;
-    text-decoration: underline;
-}
-
-a.nav-link:active {
-    color: #ffffff;
-    text-decoration: underline;
-}
-
-.photo-grid {
-    display: flex;
-    gap: 10px;
-    justify-content: center;
-    align-content: center;
-}
-
-img {
-    height: 100px;
+.navigation a {
+    color: white;
+    text-decoration: none;
+    margin: 0 10px;
 }
 
 footer {
-    border-top: 2px white solid;
     margin-top: 20px;
-    margin-bottom: 20px;
-    padding: 5px;
+    border-top: 2px solid white;
 }
 
 .icon-container {
