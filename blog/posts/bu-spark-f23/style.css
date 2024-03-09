@@ -4,26 +4,27 @@ html {
     font-family: "Courier Prime", monospace;
     background-color: #222a68;
     color: white;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-.container {
     text-align: center;
 }
 
-.blog-text {
-    border-top: 2px solid white;
-    padding: 10%;
+.blog-page {
+    display: flex;
+    flex-direction: column;
+    width: 500px;
+    justify-content: center;
+    margin: auto;
+    align-content: center;
 }
 
-.profile-img {
-    object-fit: cover;
-    object-position: 0px -65px;
-    width: 250px;
-    height: 250px;
-    border-radius: 50%;
+.profile-container {
+    text-align: center;
+    justify-content: center;
+}
+
+.blog-page a {
+    color: white;
+    text-decoration: underline;
+    margin: 0 10px;
 }
 
 .name {
@@ -34,10 +35,22 @@ html {
     margin-bottom: 0px;
 }
 
+
+
+.profile-img {
+    object-fit: cover;
+    object-position: 0px -65px;
+    width: 250px;
+    height: 250px;
+    border-radius: 50%;
+}
+
 .social-links-container {
     /* Style your social media icons here */
-    display: inline-flex;
+    display: flex;
     justify-content: center;
+    border-bottom: 2px white solid;
+    margin-bottom: 5px;
 }
 
 .linkedin-icon,
@@ -45,19 +58,43 @@ html {
 .email-icon {
     width: 25px;
     height: auto;
-    margin: 0 10px 25px;
+    margin: 10px;
 }
 
+.about-me-title {
+    text-align: center;
+    font-size: 32px;
+}
 
-.navigation a {
-    color: white;
-    text-decoration: none;
-    margin: 0 10px;
+a.nav-link:link {
+    color: #ffffff;
+    text-decoration: underline;
+}
+
+a.nav-link:visited {
+    color: #ffffff;
+    text-decoration: underline;
+}
+
+a.nav-link:hover {
+    color: #ffffff;
+    text-decoration: underline;
+}
+
+a.nav-link:active {
+    color: #ffffff;
+    text-decoration: underline;
+}
+
+img {
+    height: 100px;
 }
 
 footer {
+    border-top: 2px white solid;
     margin-top: 20px;
-    border-top: 2px solid white;
+    margin-bottom: 20px;
+    padding: 5px;
 }
 
 .icon-container {
@@ -78,7 +115,7 @@ footer {
     /* Position the tooltip */
     position: absolute;
     z-index: 1;
-    bottom: -10%;
+    bottom: -40%;
     /* Adjust if necessary */
     left: 50%;
     transform: translateX(-50%);
