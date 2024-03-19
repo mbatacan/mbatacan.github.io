@@ -2,3 +2,4 @@
 portfolio website to work on basic html and css
 
 Work on addingsection for projects
+TODO: Blog on graduating?
