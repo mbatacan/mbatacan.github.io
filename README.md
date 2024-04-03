@@ -6,3 +6,4 @@ TODO: Blog on graduating?
 Todo: work on one for personal project
 Brainstorm new implementations on website
 - Add about-me Personal Project
+- Blog post
