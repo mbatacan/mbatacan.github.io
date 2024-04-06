@@ -7,3 +7,4 @@ Todo: work on one for personal project
 Brainstorm new implementations on website
 - Add about-me Personal Project
 - Blog post
+- update static css
