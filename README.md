@@ -9,3 +9,4 @@ Brainstorm new implementations on website
 - Blog post
 - update static css
 - add javascript
+- fix up about me
