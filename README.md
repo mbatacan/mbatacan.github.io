@@ -10,3 +10,4 @@ Brainstorm new implementations on website
 - update static css
 - add javascript
 - fix up about me
+- start reading search ai textbook
