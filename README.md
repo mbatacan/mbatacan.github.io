@@ -11,3 +11,4 @@ Brainstorm new implementations on website
 - add javascript
 - fix up about me
 - start reading search ai textbook
+- update resume
