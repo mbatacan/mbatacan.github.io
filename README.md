@@ -12,3 +12,4 @@ Brainstorm new implementations on website
 - fix up about me
 - start reading search ai textbook
 - update resume
+- look into deploying model within github.io site
