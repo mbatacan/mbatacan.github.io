@@ -1,0 +1,30 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description = "Matthew Batacan's portfolio and blog" } = Astro.props;
+---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content={description} />
+  <meta property="og:title" content={title} />
+  <meta property="og:description" content={description} />
+  <meta property="og:type" content="website" />
+  <title>{title}</title>
+</head>
+<body>
+  <div class="page-wrapper">
+    <div class="content-container">
+      <slot />
+    </div>
+  </div>
+</body>
+</html>

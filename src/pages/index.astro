@@ -1,0 +1,14 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ProfileHeader from '../components/ProfileHeader.astro';
+import Footer from '../components/Footer.astro';
+---
+
+<BaseLayout title="Matthew Batacan Portfolio">
+  <ProfileHeader />
+  <nav class="navigation">
+    <a class="nav-link" href="/blog">Blog</a>
+    <a class="nav-link" href="/about">About</a>
+  </nav>
+  <Footer links={[{ label: 'Blog', href: '/blog' }, { label: 'About', href: '/about' }]} />
+</BaseLayout>
