@@ -1,0 +1,29 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import SiteHeader from '../../components/SiteHeader.astro';
+import Footer from '../../components/Footer.astro';
+---
+
+<BaseLayout
+  title="Lab — Matthew Batacan"
+  description="Small, interactive machine-learning demos that run entirely in your browser."
+>
+  <SiteHeader />
+
+  <div class="lab-gallery">
+    <a class="lab-card" href="/lab/fool-the-classifier">
+      <h2 class="lab-card-title">Fool the Classifier</h2>
+      <p class="lab-card-description">
+        Draw something and watch a real neural net guess it live, right in your browser.
+      </p>
+    </a>
+    <a class="lab-card lab-card--placeholder" href="https://github.com/mbatacan" target="_blank" rel="noopener">
+      <h2 class="lab-card-title">More to come</h2>
+      <p class="lab-card-description">
+        More browser-based ML demos are on the way — follow along on GitHub.
+      </p>
+    </a>
+  </div>
+
+  <Footer />
+</BaseLayout>
