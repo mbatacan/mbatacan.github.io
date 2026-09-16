@@ -1,6 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import ProfileHeader from '../components/ProfileHeader.astro';
+import SiteHeader from '../components/SiteHeader.astro';
 import Footer from '../components/Footer.astro';
 import { fetchRecentActivity } from '../lib/github';
 
@@ -11,7 +11,7 @@ const repos = await fetchRecentActivity();
   title="Log — Matthew Batacan"
   description="What I've most recently been committing to, pulled live from GitHub."
 >
-  <ProfileHeader />
+  <SiteHeader />
 
   <div class="log-repos">
     {repos.map(repo => (
@@ -32,5 +32,5 @@ const repos = await fetchRecentActivity();
     ))}
   </div>
 
-  <Footer links={[{ label: 'Home', href: '/' }, { label: 'Blog', href: '/blog' }, { label: 'Lab', href: '/lab/fool-the-classifier' }]} />
+  <Footer />
 </BaseLayout>

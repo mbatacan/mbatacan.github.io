@@ -43,6 +43,11 @@ a:hover {
   font-weight: 700;
 }
 
+.intro {
+  line-height: 1.7;
+  text-align: center;
+}
+
 /* ── Social icons ───────────────────────────────── */
 .social-links-container {
   display: flex;
@@ -94,7 +99,7 @@ a:hover {
 
 .content-container {
   width: 100%;
-  max-width: 500px;
+  max-width: 640px;
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -104,16 +109,52 @@ a:hover {
   max-width: 900px;
 }
 
+/* ── Site header (compact, non-homepage pages) ──── */
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid white;
+}
+
+.site-header-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+}
+
+.site-header-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: 0px -10px;
+}
+
+.site-header-name {
+  font-weight: 700;
+}
+
 /* ── Navigation ─────────────────────────────────── */
-.navigation {
+.site-nav {
   display: flex;
   gap: 20px;
   justify-content: center;
+  flex-wrap: wrap;
 }
 
 .nav-link {
   color: white;
   text-decoration: underline;
+}
+
+.nav-link[aria-current="page"] {
+  text-decoration: none;
+  font-weight: 700;
 }
 
 /* ── Footer ─────────────────────────────────────── */
@@ -139,8 +180,21 @@ footer {
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.blog-link a {
+.blog-link-title {
   font-size: 1rem;
+}
+
+.blog-link-date {
+  font-size: 0.8rem;
+  opacity: 0.7;
+  margin-top: 4px;
+}
+
+.blog-link-description {
+  font-size: 0.9rem;
+  opacity: 0.85;
+  margin-top: 6px;
+  line-height: 1.5;
 }
 
 /* ── Blog post ──────────────────────────────────── */

@@ -1,16 +1,16 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import ProfileHeader from '../components/ProfileHeader.astro';
+import SiteNav from '../components/SiteNav.astro';
 import Footer from '../components/Footer.astro';
 ---
 
 <BaseLayout title="Matthew Batacan Portfolio">
   <ProfileHeader />
-  <nav class="navigation">
-    <a class="nav-link" href="/blog">Blog</a>
-    <a class="nav-link" href="/about">About</a>
-    <a class="nav-link" href="/lab/fool-the-classifier">Lab</a>
-    <a class="nav-link" href="/log">Log</a>
-  </nav>
-  <Footer links={[{ label: 'Blog', href: '/blog' }, { label: 'About', href: '/about' }, { label: 'Lab', href: '/lab/fool-the-classifier' }, { label: 'Log', href: '/log' }]} />
+  <p class="intro">
+    Data scientist and builder. Writing about machine learning projects, running
+    live ML demos in the browser, and tracking what I'm shipping.
+  </p>
+  <SiteNav />
+  <Footer />
 </BaseLayout>

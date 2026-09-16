@@ -1,6 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import ProfileHeader from '../components/ProfileHeader.astro';
+import SiteHeader from '../components/SiteHeader.astro';
 import Footer from '../components/Footer.astro';
 ---
 
@@ -8,7 +8,7 @@ import Footer from '../components/Footer.astro';
   title="About Me — Matthew Batacan"
   description="Data scientist from Hawaii, BU grad, former BU Spark TPM and IBM intern."
 >
-  <ProfileHeader />
+  <SiteHeader />
 
   <div class="about-bio">
     <p>
@@ -34,5 +34,5 @@ import Footer from '../components/Footer.astro';
     <img src="/assets/icons/ibm-reebus.png" alt="IBM" />
   </div>
 
-  <Footer links={[{ label: 'Home', href: '/' }, { label: 'Blog', href: '/blog' }, { label: 'Lab', href: '/lab/fool-the-classifier' }, { label: 'Log', href: '/log' }]} />
+  <Footer />
 </BaseLayout>
