@@ -100,6 +100,10 @@ a:hover {
   gap: 24px;
 }
 
+.content-container--wide {
+  max-width: 900px;
+}
+
 /* ── Navigation ─────────────────────────────────── */
 .navigation {
   display: flex;
@@ -181,4 +185,173 @@ footer {
 .photo-grid img {
   height: 50px;
   object-fit: contain;
+}
+
+/* ── Lab: Fool the Classifier ───────────────────── */
+.lab-intro {
+  line-height: 1.7;
+}
+
+.lab-game {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.lab-canvas-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lab-canvas {
+  background-color: black;
+  border: 2px solid white;
+  border-radius: 8px;
+  touch-action: none;
+  cursor: crosshair;
+  width: 280px;
+  height: 280px;
+}
+
+.lab-tools {
+  display: flex;
+  gap: 10px;
+}
+
+.lab-tools button {
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: white;
+  background: transparent;
+  border: 1px solid white;
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.lab-tools button:hover {
+  opacity: 0.8;
+}
+
+.lab-status {
+  min-height: 1.4rem;
+  font-size: 0.9rem;
+}
+
+.lab-status.lab-status--error {
+  color: #ff8080;
+}
+
+.lab-results-col {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.lab-target {
+  font-size: 1rem;
+}
+
+.lab-scoreboard {
+  display: flex;
+  gap: 20px;
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+
+.lab-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lab-bar {
+  display: grid;
+  grid-template-columns: 7rem 1fr 2.6rem;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.lab-bar-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lab-bar.lab-bar--top .lab-bar-name {
+  font-weight: 700;
+}
+
+.lab-bar-track {
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+}
+
+.lab-bar-track > i {
+  display: block;
+  height: 100%;
+  background: white;
+}
+
+.lab-bar-pct {
+  text-align: right;
+}
+
+/* ── Project log ────────────────────────────────── */
+.log-repos {
+  display: flex;
+  flex-direction: column;
+  border-top: 2px solid white;
+}
+
+.log-repo {
+  padding: 20px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.log-repo-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.log-repo-name {
+  font-size: 1rem;
+}
+
+.log-repo-date {
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+.log-repo-description {
+  font-size: 0.85rem;
+  opacity: 0.85;
+  margin-top: 4px;
+}
+
+.log-commits {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+
+.log-commit {
+  opacity: 0.9;
+}
+
+.log-commit::before {
+  content: "› ";
+  opacity: 0.6;
 }

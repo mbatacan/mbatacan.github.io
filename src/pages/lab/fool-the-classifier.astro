@@ -1,0 +1,211 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ProfileHeader from '../../components/ProfileHeader.astro';
+import Footer from '../../components/Footer.astro';
+---
+
+<BaseLayout
+  title="Fool the Classifier — Matthew Batacan"
+  description="Draw something and watch a real neural net (running entirely in your browser) guess what it is."
+  wide
+>
+  <ProfileHeader />
+
+  <div class="lab-intro">
+    <p>
+      Draw something. A neural net trained on Google's
+      <a href="https://quickdraw.withgoogle.com/data" target="_blank" rel="noopener">Quick, Draw!</a>
+      dataset guesses what it is, live — running entirely in your browser, nothing is sent anywhere.
+      Try to draw the target word so badly the model gets it wrong.
+    </p>
+  </div>
+
+  <div class="lab-game">
+    <div class="lab-canvas-col">
+      <canvas id="lab-canvas" class="lab-canvas" width="280" height="280"></canvas>
+      <div class="lab-tools">
+        <button id="lab-clear" type="button">clear</button>
+        <button id="lab-undo" type="button">undo</button>
+        <button id="lab-skip" type="button">new target</button>
+      </div>
+      <div id="lab-status" class="lab-status">loading model…</div>
+    </div>
+
+    <div class="lab-results-col">
+      <div class="lab-target">
+        target: <strong id="lab-target-word">—</strong>
+      </div>
+      <div class="lab-scoreboard">
+        <span>streak: <strong id="lab-streak">0</strong></span>
+        <span>best: <strong id="lab-best">0</strong></span>
+      </div>
+      <div id="lab-bars" class="lab-bars"></div>
+    </div>
+  </div>
+
+  <Footer links={[{ label: 'Home', href: '/' }, { label: 'Blog', href: '/blog' }, { label: 'Log', href: '/log' }]} />
+</BaseLayout>
+
+<script>
+  import labels from '../../data/quickdraw-labels.json';
+
+  import('../../scripts/sketch-classifier.ts').then(async (classifier) => {
+    const { pickTarget, checkWin } = await import('../../scripts/game.ts');
+
+    const canvas = document.getElementById('lab-canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const statusEl = document.getElementById('lab-status');
+    const targetEl = document.getElementById('lab-target-word');
+    const streakEl = document.getElementById('lab-streak');
+    const bestEl = document.getElementById('lab-best');
+    const barsEl = document.getElementById('lab-bars');
+    const clearBtn = document.getElementById('lab-clear');
+    const undoBtn = document.getElementById('lab-undo');
+    const skipBtn = document.getElementById('lab-skip');
+
+    let drawing = false;
+    let history = [];
+    let target = pickTarget();
+    let streak = 0;
+    let best = 0;
+    try {
+      best = Number(localStorage.getItem('lab-best-streak')) || 0;
+    } catch {
+      best = 0;
+    }
+    bestEl.textContent = String(best);
+    targetEl.textContent = target;
+
+    function resetCanvas() {
+      ctx.fillStyle = 'black';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = 'white';
+      ctx.lineWidth = 14;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+    }
+    resetCanvas();
+    history = [ctx.getImageData(0, 0, canvas.width, canvas.height)];
+
+    function pushHistory() {
+      history.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+      if (history.length > 20) history.shift();
+    }
+
+    function pointerPos(e) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: ((e.clientX - rect.left) / rect.width) * canvas.width,
+        y: ((e.clientY - rect.top) / rect.height) * canvas.height,
+      };
+    }
+
+    canvas.addEventListener('pointerdown', (e) => {
+      drawing = true;
+      const { x, y } = pointerPos(e);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      canvas.setPointerCapture(e.pointerId);
+    });
+    canvas.addEventListener('pointermove', (e) => {
+      if (!drawing) return;
+      const { x, y } = pointerPos(e);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    });
+    function endStroke() {
+      if (!drawing) return;
+      drawing = false;
+      pushHistory();
+      runInference();
+    }
+    canvas.addEventListener('pointerup', endStroke);
+    canvas.addEventListener('pointercancel', endStroke);
+
+    clearBtn.addEventListener('click', () => {
+      resetCanvas();
+      pushHistory();
+      barsEl.innerHTML = '';
+    });
+
+    undoBtn.addEventListener('click', () => {
+      if (history.length <= 1) return;
+      history.pop();
+      ctx.putImageData(history[history.length - 1], 0, 0);
+      runInference();
+    });
+
+    skipBtn.addEventListener('click', () => {
+      streak = 0;
+      streakEl.textContent = '0';
+      target = pickTarget(target);
+      targetEl.textContent = target;
+    });
+
+    function renderBars(predictions) {
+      barsEl.innerHTML = predictions
+        .map((p, i) => {
+          const pct = Math.round(p.prob * 100);
+          const topClass = i === 0 ? ' lab-bar--top' : '';
+          return `<div class="lab-bar${topClass}">` +
+            `<span class="lab-bar-name">${p.label}</span>` +
+            `<span class="lab-bar-track"><i style="width:${Math.max(2, pct)}%"></i></span>` +
+            `<span class="lab-bar-pct">${pct}%</span>` +
+            `</div>`;
+        })
+        .join('');
+    }
+
+    let inferring = false;
+    async function runInference() {
+      if (inferring) return;
+      inferring = true;
+      try {
+        const gray = classifier.preprocess(canvas);
+        if (!gray) {
+          barsEl.innerHTML = '';
+          return;
+        }
+        const predictions = await classifier.classify(gray, labels, 5);
+        renderBars(predictions);
+        if (checkWin(predictions, target)) {
+          streak += 1;
+          streakEl.textContent = String(streak);
+          if (streak > best) {
+            best = streak;
+            bestEl.textContent = String(best);
+            try {
+              localStorage.setItem('lab-best-streak', String(best));
+            } catch {
+              // per-viewer convenience only; ignore if storage is unavailable
+            }
+          }
+          setTimeout(() => {
+            target = pickTarget(target);
+            targetEl.textContent = target;
+            resetCanvas();
+            history = [ctx.getImageData(0, 0, canvas.width, canvas.height)];
+            barsEl.innerHTML = '';
+          }, 900);
+        }
+      } finally {
+        inferring = false;
+      }
+    }
+
+    try {
+      statusEl.textContent = 'loading model… 0%';
+      await classifier.loadSession((loaded, total) => {
+        if (total) {
+          statusEl.textContent = `loading model… ${Math.round((loaded / total) * 100)}%`;
+        }
+      });
+      statusEl.textContent = 'ready — start drawing';
+      statusEl.classList.remove('lab-status--error');
+    } catch (err) {
+      statusEl.textContent = `Failed to load model: ${err.message ?? err}`;
+      statusEl.classList.add('lab-status--error');
+      throw err;
+    }
+  });
+</script>

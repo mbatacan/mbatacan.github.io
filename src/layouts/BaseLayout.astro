@@ -4,9 +4,10 @@ import '../styles/global.css';
 interface Props {
   title: string;
   description?: string;
+  wide?: boolean;
 }
 
-const { title, description = "Matthew Batacan's portfolio and blog" } = Astro.props;
+const { title, description = "Matthew Batacan's portfolio and blog", wide = false } = Astro.props;
 ---
 
 <!DOCTYPE html>
@@ -22,7 +23,7 @@ const { title, description = "Matthew Batacan's portfolio and blog" } = Astro.pr
 </head>
 <body>
   <div class="page-wrapper">
-    <div class="content-container">
+    <div class={wide ? "content-container content-container--wide" : "content-container"}>
       <slot />
     </div>
   </div>
