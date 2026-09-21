@@ -25,19 +25,18 @@ src/
   components/
     ProfileHeader.astro   # Large profile photo + name + social icons — homepage only
     SiteHeader.astro      # Compact avatar + name + SiteNav — every other page
-    SiteNav.astro         # Blog/About/Lab/Log links, highlights the current page
+    SiteNav.astro         # Blog/Lab links, highlights the current page
     Footer.astro          # Copyright line only; no props
   styles/
-    global.css            # All styles — shared layout, header/nav, blog, about, lab, log
+    global.css            # All styles — shared layout, header/nav, blog, bio, lab
   pages/
-    index.astro            # Homepage
-    about.astro             # About page
+    index.astro            # Homepage: profile photo, nav, and full bio (about content lives here)
     blog/
       index.astro            # Blog listing (auto-sorted by date from content collection)
       [slug].astro            # Dynamic blog post renderer
     lab/
+      index.astro              # Lab gallery: Completed / In Progress / Ideas, from lab-projects.ts
       fool-the-classifier.astro  # Client-side ONNX sketch-classifier demo/game
-    log.astro               # Recently-pushed-to repos, fetched from GitHub at build time
     404.astro               # Custom not-found page
   scripts/
     sketch-classifier.ts   # preprocess/loadSession/classify for the lab demo (browser-only)
@@ -45,8 +44,7 @@ src/
   data/
     quickdraw-labels.json      # The 345 QuickDraw class labels, in model output order
     quickdraw-game-classes.ts  # Curated subset used as game targets
-  lib/
-    github.ts              # fetchRecentActivity() — GitHub API calls, runs at build time only
+    lab-projects.ts            # Everything shown on /lab: title/description/status/href
   content.config.ts        # Blog collection schema (title, date, description)
   content/
     blog/
@@ -57,7 +55,7 @@ public/
     images/                 # profile.jpg, and per-post images
     icons/                  # Social icons, org logos
 .github/workflows/
-  deploy.yml                # Build + push dist/ to gh-pages, on push/schedule/dispatch
+  deploy.yml                # Build + push dist/ to gh-pages, on push/dispatch
 ```
 
 ## Adding a new blog post
@@ -76,12 +74,14 @@ Post content in Markdown...
 
 The blog index auto-updates — no manual link list needed. The URL becomes `/blog/<slug>`.
 
+## Adding/updating a lab project
+
+Edit `src/data/lab-projects.ts` — no page changes needed. `status: 'completed'` needs an `href`; `'in-progress'` and `'idea'` render as a non-clickable card (nothing to link to yet). This one file is also where "ideas" live now — there's no separate ideas page or collection.
+
 ## Adding a page
 
 Every page except the homepage uses `SiteHeader` (not `ProfileHeader`) and `Footer` with no props — nav is defined once in `SiteNav.astro`, not per-page. Add the route there when adding a new top-level section.
 
 ## Deployment
 
-Push to `main` → GitHub Actions builds the site and pushes `dist/` to the `gh-pages` branch (`peaceiris/actions-gh-pages`, pinned to a commit SHA). GitHub Pages serves from that branch. The workflow also runs on a daily cron so `/log` reflects recent GitHub activity even without a push.
-
-`GITHUB_TOKEN` is passed to the build step so `src/lib/github.ts` gets a higher API rate limit — this is the Actions-provided token, not a manually configured secret.
+Push to `main` → GitHub Actions builds the site and pushes `dist/` to the `gh-pages` branch (`peaceiris/actions-gh-pages`, pinned to a commit SHA). GitHub Pages serves from that branch.

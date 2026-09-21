@@ -43,11 +43,6 @@ a:hover {
   font-weight: 700;
 }
 
-.intro {
-  line-height: 1.7;
-  text-align: center;
-}
-
 /* ── Social icons ───────────────────────────────── */
 .social-links-container {
   display: flex;
@@ -197,43 +192,6 @@ footer {
   line-height: 1.5;
 }
 
-/* ── Ideas ──────────────────────────────────────── */
-.ideas-intro {
-  line-height: 1.7;
-}
-
-.ideas-list {
-  display: flex;
-  flex-direction: column;
-  border-top: 2px dashed white;
-}
-
-.idea-item {
-  padding: 20px 0;
-  border-bottom: 1px dashed rgba(255, 255, 255, 0.3);
-}
-
-.idea-title {
-  font-size: 1rem;
-}
-
-.idea-title::before {
-  content: "🚧 ";
-}
-
-.idea-date {
-  font-size: 0.8rem;
-  opacity: 0.7;
-  margin-top: 4px;
-}
-
-.idea-description {
-  font-size: 0.9rem;
-  opacity: 0.85;
-  margin-top: 6px;
-  line-height: 1.5;
-}
-
 /* ── Blog post ──────────────────────────────────── */
 .post-content {
   display: flex;
@@ -257,7 +215,7 @@ footer {
   opacity: 0.7;
 }
 
-/* ── About page ─────────────────────────────────── */
+/* ── Bio (homepage) ─────────────────────────────── */
 .about-bio {
   display: flex;
   flex-direction: column;
@@ -286,12 +244,19 @@ footer {
 .lab-section-title {
   font-size: 1.1rem;
   margin-bottom: 12px;
+  text-align: center;
 }
 
 .lab-gallery {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 16px;
+}
+
+@media (max-width: 500px) {
+  .lab-gallery {
+    grid-template-columns: 1fr;
+  }
 }
 
 .lab-card {
@@ -432,56 +397,4 @@ footer {
 
 .lab-bar-pct {
   text-align: right;
-}
-
-/* ── Project log ────────────────────────────────── */
-.log-repos {
-  display: flex;
-  flex-direction: column;
-  border-top: 2px solid white;
-}
-
-.log-repo {
-  padding: 20px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.log-repo-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.log-repo-name {
-  font-size: 1rem;
-}
-
-.log-repo-date {
-  font-size: 0.8rem;
-  opacity: 0.7;
-}
-
-.log-repo-description {
-  font-size: 0.85rem;
-  opacity: 0.85;
-  margin-top: 4px;
-}
-
-.log-commits {
-  margin-top: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 0.85rem;
-}
-
-.log-commit {
-  opacity: 0.9;
-}
-
-.log-commit::before {
-  content: "› ";
-  opacity: 0.6;
 }

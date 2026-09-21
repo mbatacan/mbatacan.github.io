@@ -6,6 +6,7 @@ import { LAB_PROJECTS } from '../../data/lab-projects';
 
 const completed = LAB_PROJECTS.filter(p => p.status === 'completed');
 const inProgress = LAB_PROJECTS.filter(p => p.status === 'in-progress');
+const ideas = LAB_PROJECTS.filter(p => p.status === 'idea');
 ---
 
 <BaseLayout
@@ -15,7 +16,6 @@ const inProgress = LAB_PROJECTS.filter(p => p.status === 'in-progress');
   <SiteHeader />
 
   <section>
-    <h2 class="lab-section-title">Completed</h2>
     <div class="lab-gallery">
       {completed.map(project => (
         <a class="lab-card" href={project.href}>
@@ -30,6 +30,18 @@ const inProgress = LAB_PROJECTS.filter(p => p.status === 'in-progress');
     <h2 class="lab-section-title">In Progress</h2>
     <div class="lab-gallery">
       {inProgress.map(project => (
+        <div class="lab-card lab-card--in-progress">
+          <h3 class="lab-card-title">{project.title}</h3>
+          <p class="lab-card-description">{project.description}</p>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <section>
+    <h2 class="lab-section-title">Ideas</h2>
+    <div class="lab-gallery">
+      {ideas.map(project => (
         <div class="lab-card lab-card--in-progress">
           <h3 class="lab-card-title">{project.title}</h3>
           <p class="lab-card-description">{project.description}</p>

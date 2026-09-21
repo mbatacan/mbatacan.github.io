@@ -33,10 +33,10 @@ Post content in Markdown...
 
 The blog index picks it up automatically, sorted by date. URL becomes `/blog/<slug>`.
 
-## Project log
+## Adding/updating a lab project
 
-`/log` lists the repos most recently pushed to under this GitHub account, with their latest commits — fetched from the GitHub API at build time (`src/lib/github.ts`), not hand-maintained.
+Edit `src/data/lab-projects.ts`. Each entry has a `status` of `completed`, `in-progress`, or `idea` — the `/lab` page groups by that automatically. A `completed` entry needs an `href` to link to; the other two render as a non-clickable card since there's nothing to send anyone to yet.
 
 ## Deployment
 
-Pushing to `main` triggers `.github/workflows/deploy.yml`, which builds the site and pushes `dist/` to the `gh-pages` branch. GitHub Pages is configured to serve from that branch. The workflow also runs on a daily schedule so `/log` stays current even without a push.
+Pushing to `main` triggers `.github/workflows/deploy.yml`, which builds the site and pushes `dist/` to the `gh-pages` branch. GitHub Pages is configured to serve from that branch.
