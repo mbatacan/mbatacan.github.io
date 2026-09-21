@@ -14,7 +14,7 @@ export const LAB_PROJECTS: LabProject[] = [
   },
   {
     title: 'about-me',
-    description: 'A Python/LangChain project — for when you\'re too lazy to talk about yourself. Not a browser demo, so this links out to the repo.',
+    description: 'A Python/LangChain project — for when you\'re too lazy to talk about yourself.',
     status: 'completed',
     href: 'https://github.com/mbatacan/about-me',
   },
@@ -25,9 +25,33 @@ export const LAB_PROJECTS: LabProject[] = [
     status: 'in-progress',
   },
   {
-    title: 'Ask My Portfolio',
-    description:
-      'A semantic search box over my own blog posts and projects — type a question or a job description, and an in-browser embedding model ranks what\'s actually relevant. No server, no API key, just my own content.',
+    title: 'KAI',
+    description: 'An AI agent for working through Kaggle competitions.',
+    status: 'in-progress',
+  },
+  {
+    title: 'open-edge',
+    description: 'A calisthenics training tracker.',
+    status: 'in-progress',
+  },
+  {
+    title: 'dot',
+    description: 'Dotfiles and config for the tools I use day to day.',
+    status: 'in-progress',
+  },
+  {
+    title: 'brolouge',
+    description: 'A fine-tuned LLM project built as a "friend" clone.',
+    status: 'in-progress',
+  },
+  {
+    title: 'Pretty-Print Logger',
+    description: 'A Python logging library that pretty-prints its output — logging that\'s actually fun to read.',
+    status: 'idea',
+  },
+  {
+    title: 'Fantasy Football Modeler',
+    description: 'General sports analytics and modeling for fantasy football.',
     status: 'idea',
   },
 ];
