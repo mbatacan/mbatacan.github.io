@@ -13,6 +13,12 @@ export const LAB_PROJECTS: LabProject[] = [
     href: '/lab/fool-the-classifier',
   },
   {
+    title: 'about-me',
+    description: 'A Python/LangChain project — for when you\'re too lazy to talk about yourself. Not a browser demo, so this links out to the repo.',
+    status: 'completed',
+    href: 'https://github.com/mbatacan/about-me',
+  },
+  {
     title: 'Race an RL Paddler',
     description:
       'An outrigger canoe race against an opponent controlled by a reinforcement-learning policy, trained offline in a separate repo and shipped as a small in-browser model.',

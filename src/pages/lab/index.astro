@@ -17,12 +17,20 @@ const ideas = LAB_PROJECTS.filter(p => p.status === 'idea');
 
   <section>
     <div class="lab-gallery">
-      {completed.map(project => (
-        <a class="lab-card" href={project.href}>
-          <h3 class="lab-card-title">{project.title}</h3>
-          <p class="lab-card-description">{project.description}</p>
-        </a>
-      ))}
+      {completed.map(project => {
+        const isExternal = project.href?.startsWith('http');
+        return (
+          <a
+            class="lab-card"
+            href={project.href}
+            target={isExternal ? '_blank' : undefined}
+            rel={isExternal ? 'noopener' : undefined}
+          >
+            <h3 class="lab-card-title">{project.title}</h3>
+            <p class="lab-card-description">{project.description}</p>
+          </a>
+        );
+      })}
     </div>
   </section>
 
