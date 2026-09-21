@@ -2,6 +2,10 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import SiteHeader from '../../components/SiteHeader.astro';
 import Footer from '../../components/Footer.astro';
+import { LAB_PROJECTS } from '../../data/lab-projects';
+
+const completed = LAB_PROJECTS.filter(p => p.status === 'completed');
+const inProgress = LAB_PROJECTS.filter(p => p.status === 'in-progress');
 ---
 
 <BaseLayout
@@ -10,20 +14,29 @@ import Footer from '../../components/Footer.astro';
 >
   <SiteHeader />
 
-  <div class="lab-gallery">
-    <a class="lab-card" href="/lab/fool-the-classifier">
-      <h2 class="lab-card-title">Fool the Classifier</h2>
-      <p class="lab-card-description">
-        Draw something and watch a real neural net guess it live, right in your browser.
-      </p>
-    </a>
-    <a class="lab-card lab-card--placeholder" href="https://github.com/mbatacan" target="_blank" rel="noopener">
-      <h2 class="lab-card-title">More to come</h2>
-      <p class="lab-card-description">
-        More browser-based ML demos are on the way — follow along on GitHub.
-      </p>
-    </a>
-  </div>
+  <section>
+    <h2 class="lab-section-title">Completed</h2>
+    <div class="lab-gallery">
+      {completed.map(project => (
+        <a class="lab-card" href={project.href}>
+          <h3 class="lab-card-title">{project.title}</h3>
+          <p class="lab-card-description">{project.description}</p>
+        </a>
+      ))}
+    </div>
+  </section>
+
+  <section>
+    <h2 class="lab-section-title">In Progress</h2>
+    <div class="lab-gallery">
+      {inProgress.map(project => (
+        <div class="lab-card lab-card--in-progress">
+          <h3 class="lab-card-title">{project.title}</h3>
+          <p class="lab-card-description">{project.description}</p>
+        </div>
+      ))}
+    </div>
+  </section>
 
   <Footer />
 </BaseLayout>
