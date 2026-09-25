@@ -34,6 +34,7 @@ import Footer from '../../components/Footer.astro';
         <span id="af-hud-blue" class="af-hud-item af-hud-item--blue">blue: —</span>
         <span id="af-hud-red" class="af-hud-item af-hud-item--red">red: —</span>
         <span id="af-hud-stroke" class="af-hud-item">stroke 0/0</span>
+        <button id="af-camera-toggle" class="af-camera-toggle" type="button">top-down view</button>
       </div>
       <div id="af-status" class="af-status">loading…</div>
     </div>
@@ -54,7 +55,7 @@ import Footer from '../../components/Footer.astro';
           <li><kbd>1</kbd> forward &middot; <kbd>2</kbd> draw &middot; <kbd>3</kbd> poke &middot; <kbd>4</kbd> rudder</li>
         </ul>
         <p class="af-hint">Your current selection fires automatically every stroke -- there's no separate "paddle" key.</p>
-        <button id="af-start-play" class="af-button" type="button">start</button>
+        <button id="af-start-play" class="af-button" type="button">restart</button>
       </div>
     </div>
   </div>
@@ -69,8 +70,11 @@ import Footer from '../../components/Footer.astro';
 </BaseLayout>
 
 <script>
-  import { Duel, EPISODE_STROKES, policies, type SideId } from '../../scripts/ama-flow/game';
-  import { lerpState } from '../../lib/ama-flow/physics';
+  import { Duel, EPISODE_STROKES, FINISH_DISTANCE_M, policies, type SideId } from '../../scripts/ama-flow/game';
+  import { decodeAction, lerpState } from '../../lib/ama-flow/physics';
+
+  const SIDE_NAMES = ['port', 'starboard'];
+  const STROKE_TYPE_NAMES = ['forward', 'draw', 'poke', 'rudder'];
 
   type Mode = 'watch' | 'play';
 
@@ -89,6 +93,7 @@ import Footer from '../../components/Footer.astro';
   const resultsTitleEl = document.getElementById('af-results-title')!;
   const resultsBodyEl = document.getElementById('af-results-body')!;
   const resultsCloseBtn = document.getElementById('af-results-close')!;
+  const cameraToggleBtn = document.getElementById('af-camera-toggle')!;
 
   const STROKE_DURATION_S = 1.1; // matches ama-flow's oc6_stroke_config().duration_s
   const WATCH_SPEED = 2.5; // sim-seconds per real second; Watch has no input to time against
@@ -185,9 +190,16 @@ import Footer from '../../components/Footer.astro';
   });
 
   import('../../scripts/ama-flow/scene').then(({ AmaFlowScene }) => {
-    const scene = new AmaFlowScene(canvas, duel.conditions.wind_direction_rad);
+    const scene = new AmaFlowScene(canvas, duel.conditions.wind_direction_rad, FINISH_DISTANCE_M);
     const resizeObserver = new ResizeObserver(() => scene.resize());
     resizeObserver.observe(canvas);
+
+    let cameraMode: 'chase' | 'top' = 'chase';
+    cameraToggleBtn.addEventListener('click', () => {
+      cameraMode = cameraMode === 'chase' ? 'top' : 'chase';
+      scene.setCameraMode(cameraMode);
+      cameraToggleBtn.textContent = cameraMode === 'chase' ? 'top-down view' : 'chase view';
+    });
 
     statusEl.textContent = 'ready';
     running = true;
@@ -219,6 +231,12 @@ import Footer from '../../components/Footer.astro';
         const b = states[Math.min(i + 1, states.length - 1)];
         const state = duel.isDone(side) ? states[states.length - 1] : lerpState(a, b, t);
         scene.setBoatState(side, state[0], state[1], state[2], elapsed);
+
+        const lastAction = duel.history(side).actions.at(-1);
+        if (lastAction !== undefined) {
+          const { side: paddleSide, strokeType } = decodeAction(lastAction);
+          scene.setStroke(side, paddleSide, strokeType, duel.isDone(side) ? 0 : t);
+        }
       }
       scene.render(elapsed, bluePlayerSide());
 
@@ -226,8 +244,15 @@ import Footer from '../../components/Footer.astro';
       const redLabel = mode === 'watch' ? 'baseline' : 'model';
       const blueErr = duel.history('player').headingErrorDeg.at(-1) ?? 0;
       const redErr = duel.history('opponent').headingErrorDeg.at(-1) ?? 0;
-      hudBlueEl.textContent = `blue (${blueLabel}): ${blueErr.toFixed(1)} deg`;
-      hudRedEl.textContent = `red (${redLabel}): ${redErr.toFixed(1)} deg`;
+      const blueAction = duel.history('player').actions.at(-1);
+      const redAction = duel.history('opponent').actions.at(-1);
+      const strokeText = (action: number | undefined) => {
+        if (action === undefined) return '';
+        const { side: s, strokeType: st } = decodeAction(action);
+        return ` · ${SIDE_NAMES[s]} ${STROKE_TYPE_NAMES[st]}`;
+      };
+      hudBlueEl.textContent = `blue (${blueLabel}): ${blueErr.toFixed(1)} deg${strokeText(blueAction)}`;
+      hudRedEl.textContent = `red (${redLabel}): ${redErr.toFixed(1)} deg${strokeText(redAction)}`;
     }
     requestAnimationFrame(frame);
   });

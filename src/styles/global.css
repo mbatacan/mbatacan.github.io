@@ -466,6 +466,22 @@ footer {
   color: #e05a5a;
 }
 
+.af-camera-toggle {
+  font-family: inherit;
+  font-size: 0.8rem;
+  color: white;
+  background: transparent;
+  border: 1px solid white;
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+  margin-left: auto;
+}
+
+.af-camera-toggle:hover {
+  opacity: 0.8;
+}
+
 .af-status {
   min-height: 1.4rem;
   font-size: 0.85rem;

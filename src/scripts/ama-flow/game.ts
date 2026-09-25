@@ -25,6 +25,11 @@ export const DEFAULT_CONDITIONS: Conditions = {
 };
 
 export const EPISODE_STROKES = 90; // ~100 s at 1x speed (stroke duration is 1.1 s)
+// A visual finish line for the scene, roughly where a boat holding a clean heading at OC6
+// cruise speed (~3.15 m/s, oc6_*_config's calibration target) ends up after EPISODE_STROKES --
+// the race is still decided by EPISODE_STROKES/rmsHeadingErrorDeg/distanceMadeGoodM, not by
+// crossing this line, but a marker beats an unbounded horizon for a sense of "how far to go."
+export const FINISH_DISTANCE_M = 250;
 const LOST_HEADING_DEG = 90;
 const LOST_HEADING_STROKES = 10;
 
