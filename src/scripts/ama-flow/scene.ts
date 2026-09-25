@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import { canoeOutlines, HULL_LENGTH_M } from '../../lib/ama-flow/canoe-geometry';
 import { PRESETS } from '../../lib/ama-flow/presets';
-import { seatSide } from '../../lib/ama-flow/physics';
+import { currentVelocity, seatSide, type Conditions } from '../../lib/ama-flow/physics';
 import { defaultSwell, waveHeight, waveSlope, type WaveComponent } from '../../lib/ama-flow/waves';
 
 export type CameraMode = 'chase' | 'top';
@@ -52,9 +52,13 @@ const FINISH_LINE_HALF_WIDTH_M = 15;
 const FINISH_BUOY_HEIGHT_M = 3;
 const HEADING_ARROW_LENGTH_M = 12;
 const HEADING_ARROW_HEIGHT_M = 1.5; // above the hull, so it clears the swell and reads from above
-const CHASE_BACK_DISTANCE_M = HULL_LENGTH_M * 1.6;
-const CHASE_HEIGHT_M = 9;
+const CHASE_BACK_DISTANCE_M = HULL_LENGTH_M * 1.0;
+const CHASE_HEIGHT_M = 5;
 const CHASE_LOOK_AHEAD_M = 25; // puts the finish line ahead in frame instead of the boat's beam
+const TOP_DOWN_HEIGHT_M = 45;
+const FOAM_COUNT = 300;
+const FOAM_RADIUS_M = 60; // half-width of the drifting foam patch, recentered under the camera
+const FOAM_COLOR = 0xffffff;
 
 /** A checkered finish gate: two buoy poles and a bright line between them, so the race has a
  * visible endpoint instead of just running out over open, featureless water.
@@ -300,12 +304,17 @@ export class AmaFlowScene {
   private ocean: THREE.Mesh;
   private oceanMaterial: THREE.ShaderMaterial;
   private waves: WaveComponent[];
+  private conditions: Conditions;
   private boats: Record<BoatId, BoatVisual>;
+  private lastPsi: Record<BoatId, number> = { player: 0, opponent: 0 };
   private cameraMode: CameraMode = 'chase';
   private cameraTarget = new THREE.Vector3();
   private cameraPosition = new THREE.Vector3(0, 20, -30);
+  private foam: THREE.Points;
+  private foamBaseXZ: Float32Array; // each fleck's fixed local (x, z) offset before drift/wrap
 
-  constructor(canvas: HTMLCanvasElement, windDirectionRad: number, finishDistanceM: number) {
+  constructor(canvas: HTMLCanvasElement, conditions: Conditions, finishDistanceM: number) {
+    this.conditions = conditions;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     // Sky's shader outputs HDR-ish values; without tone mapping it clips straight to white.
@@ -328,7 +337,7 @@ export class AmaFlowScene {
     sky.material.uniforms.sunPosition.value.copy(sun.position).normalize();
     this.scene.add(sky);
 
-    this.waves = defaultSwell(windDirectionRad);
+    this.waves = defaultSwell(conditions.wind_direction_rad);
     this.oceanMaterial = new THREE.ShaderMaterial({
       vertexShader: OCEAN_VERTEX_SHADER,
       fragmentShader: OCEAN_FRAGMENT_SHADER,
@@ -340,8 +349,8 @@ export class AmaFlowScene {
         uDirection0: { value: new THREE.Vector2(...this.waves[0].direction) },
         uDirection1: { value: new THREE.Vector2(...this.waves[1].direction) },
         uDirection2: { value: new THREE.Vector2(...this.waves[2].direction) },
-        uDeepColor: { value: new THREE.Vector3(0.02, 0.12, 0.25) },
-        uShallowColor: { value: new THREE.Vector3(0.05, 0.35, 0.45) },
+        uDeepColor: { value: new THREE.Vector3(0.05, 0.3, 0.5) },
+        uShallowColor: { value: new THREE.Vector3(0.18, 0.58, 0.72) },
         uSunDirection: { value: sun.position.clone().normalize() },
         uWorldOffset: { value: new THREE.Vector2(0, 0) },
       },
@@ -363,6 +372,22 @@ export class AmaFlowScene {
     this.scene.add(this.boats.player.group, this.boats.opponent.group);
     this.scene.add(this.boats.player.headingArrow, this.boats.opponent.headingArrow);
     this.scene.add(buildFinishLine(finishDistanceM));
+
+    // A patch of surface flecks that drift with the current, recentered under the camera each
+    // frame (like the ocean mesh) so the current -- otherwise invisible against open water -- is
+    // visible as sideways drift. See render() for the per-frame position update.
+    this.foamBaseXZ = new Float32Array(FOAM_COUNT * 2);
+    for (let i = 0; i < FOAM_COUNT; i++) {
+      this.foamBaseXZ[i * 2] = (Math.random() * 2 - 1) * FOAM_RADIUS_M;
+      this.foamBaseXZ[i * 2 + 1] = (Math.random() * 2 - 1) * FOAM_RADIUS_M;
+    }
+    const foamGeometry = new THREE.BufferGeometry();
+    foamGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(FOAM_COUNT * 3), 3));
+    this.foam = new THREE.Points(
+      foamGeometry,
+      new THREE.PointsMaterial({ color: FOAM_COLOR, size: 0.35, sizeAttenuation: true, transparent: true, opacity: 0.8 }),
+    );
+    this.scene.add(this.foam);
 
     this.resize();
   }
@@ -390,6 +415,16 @@ export class AmaFlowScene {
     const arrow = this.boats[which].headingArrow;
     arrow.position.set(threeX, height + HEADING_ARROW_HEIGHT_M, threeZ);
     arrow.setDirection(new THREE.Vector3(Math.cos(psi), 0, -Math.sin(psi))); // sim +y/port -> world -z
+    this.lastPsi[which] = psi;
+  }
+
+  /** The sim-frame heading (ama-flow's CCW-from-+x convention) that currently points "up" on
+   * screen, for the HUD wind/current compass: the focused boat's own heading in chase view, or a
+   * fixed angle in top-down view (that camera looks straight down with screen-up = world -z,
+   * which is sim +y -- see setBoatState's threeZ = -y).
+   */
+  viewUpAngleRad(focus: BoatId): number {
+    return this.cameraMode === 'top' ? Math.PI / 2 : this.lastPsi[focus];
   }
 
   /** Animate the always-forward-paddling crew (seats 1-5) in sync: alternating sides per
@@ -438,8 +473,15 @@ export class AmaFlowScene {
     this.oceanMaterial.uniforms.uTime.value = elapsedSeconds;
     const focused = this.boats[focus].group.position;
 
+    // The heading arrow only reads well from directly above -- in chase view the camera already
+    // looks down the boat's own heading, so the arrow points almost straight at/away from it and
+    // renders as a flat, illegible blob. It's only useful (and only shown) in top-down.
+    const showHeadingArrows = this.cameraMode === 'top';
+    this.boats.player.headingArrow.visible = showHeadingArrows;
+    this.boats.opponent.headingArrow.visible = showHeadingArrows;
+
     if (this.cameraMode === 'top') {
-      const desiredPos = new THREE.Vector3(focused.x, 90, focused.z + 0.001);
+      const desiredPos = new THREE.Vector3(focused.x, TOP_DOWN_HEIGHT_M, focused.z + 0.001);
       const desiredTarget = focused.clone();
       this.cameraPosition.lerp(desiredPos, 0.08);
       this.cameraTarget.lerp(desiredTarget, 0.08);
@@ -474,6 +516,25 @@ export class AmaFlowScene {
     // continuous as the mesh slides underneath it.
     this.ocean.position.set(this.cameraPosition.x, 0, this.cameraPosition.z);
     this.oceanMaterial.uniforms.uWorldOffset.value.set(this.ocean.position.x, this.ocean.position.z);
+
+    // Drift the foam patch by the current's displacement since t=0 (velocity is constant, so
+    // this is just velocity * time, no need to track a per-frame delta), wrap each fleck back
+    // into the patch once it drifts past FOAM_RADIUS_M, and recenter the whole patch under the
+    // camera -- the same "infinite ocean" trick setBoatState/the ocean mesh use.
+    const [currentVx, currentVy] = currentVelocity(this.conditions);
+    const driftX = currentVx * elapsedSeconds;
+    const driftZ = -currentVy * elapsedSeconds; // sim +y -> world -z
+    const twoR = FOAM_RADIUS_M * 2;
+    const wrap = (v: number) => (((v % twoR) + twoR + FOAM_RADIUS_M) % twoR) - FOAM_RADIUS_M;
+    const positions = this.foam.geometry.attributes.position as THREE.BufferAttribute;
+    for (let i = 0; i < FOAM_COUNT; i++) {
+      const localX = wrap(this.foamBaseXZ[i * 2] - driftX);
+      const localZ = wrap(this.foamBaseXZ[i * 2 + 1] - driftZ);
+      const x = localX + this.cameraPosition.x;
+      const z = localZ + this.cameraPosition.z;
+      positions.setXYZ(i, x, waveHeight(this.waves, x, z, elapsedSeconds) + 0.05, z);
+    }
+    positions.needsUpdate = true;
 
     this.renderer.render(this.scene, this.camera);
   }

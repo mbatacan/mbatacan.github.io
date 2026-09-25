@@ -442,6 +442,45 @@ footer {
   min-width: 280px;
 }
 
+.af-progress-track {
+  position: relative;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+
+.af-progress-marker {
+  position: absolute;
+  top: -3px;
+  width: 10px;
+  height: 16px;
+  border-radius: 2px;
+  transform: translateX(-50%);
+  transition: left 0.1s linear;
+}
+
+.af-progress-marker--blue {
+  background: #8b8bff;
+}
+
+.af-progress-marker--red {
+  background: #e05a5a;
+}
+
+.af-progress-finish {
+  position: absolute;
+  right: 0;
+  top: -4px;
+  width: 3px;
+  height: 18px;
+  background: #ffe14d;
+  border-radius: 1px;
+}
+
+.af-canvas-wrap {
+  position: relative;
+}
+
 .af-canvas {
   width: 100%;
   aspect-ratio: 4 / 3;
@@ -449,6 +488,47 @@ footer {
   border: 2px solid white;
   border-radius: 8px;
   display: block;
+}
+
+.af-compass {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.af-compass-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 4px;
+  padding: 4px 8px;
+}
+
+.af-compass-arrow {
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 14px solid currentColor;
+  flex-shrink: 0;
+}
+
+.af-compass-arrow--wind {
+  color: #ffffff;
+}
+
+.af-compass-arrow--current {
+  color: #59d6ff;
+}
+
+.af-compass-label {
+  font-size: 0.75rem;
+  color: white;
+  white-space: nowrap;
 }
 
 .af-hud {

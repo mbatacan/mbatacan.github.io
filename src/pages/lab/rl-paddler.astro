@@ -29,7 +29,24 @@ import Footer from '../../components/Footer.astro';
 
   <div class="af-game">
     <div class="af-canvas-col">
-      <canvas id="af-canvas" class="af-canvas"></canvas>
+      <div class="af-progress-track">
+        <div id="af-progress-blue" class="af-progress-marker af-progress-marker--blue"></div>
+        <div id="af-progress-red" class="af-progress-marker af-progress-marker--red"></div>
+        <div class="af-progress-finish"></div>
+      </div>
+      <div class="af-canvas-wrap">
+        <canvas id="af-canvas" class="af-canvas"></canvas>
+        <div class="af-compass">
+          <div class="af-compass-item">
+            <div id="af-compass-wind" class="af-compass-arrow af-compass-arrow--wind"></div>
+            <span id="af-compass-wind-label" class="af-compass-label">wind —</span>
+          </div>
+          <div class="af-compass-item">
+            <div id="af-compass-current" class="af-compass-arrow af-compass-arrow--current"></div>
+            <span id="af-compass-current-label" class="af-compass-label">current —</span>
+          </div>
+        </div>
+      </div>
       <div class="af-hud">
         <span id="af-hud-blue" class="af-hud-item af-hud-item--blue">blue: —</span>
         <span id="af-hud-red" class="af-hud-item af-hud-item--red">red: —</span>
@@ -55,6 +72,7 @@ import Footer from '../../components/Footer.astro';
           <li><kbd>1</kbd> forward &middot; <kbd>2</kbd> draw &middot; <kbd>3</kbd> poke &middot; <kbd>4</kbd> rudder</li>
         </ul>
         <p class="af-hint">Your current selection fires automatically every stroke -- there's no separate "paddle" key.</p>
+        <p class="af-hint">Watch the compass in the corner of the view -- wind and current both push toward wherever their arrows point.</p>
         <button id="af-start-play" class="af-button" type="button">restart</button>
       </div>
     </div>
@@ -72,9 +90,11 @@ import Footer from '../../components/Footer.astro';
 <script>
   import { Duel, EPISODE_STROKES, FINISH_DISTANCE_M, policies, type SideId } from '../../scripts/ama-flow/game';
   import { decodeAction, lerpState } from '../../lib/ama-flow/physics';
+  import { compassRotationDeg } from '../../lib/ama-flow/compass';
 
   const SIDE_NAMES = ['port', 'starboard'];
   const STROKE_TYPE_NAMES = ['forward', 'draw', 'poke', 'rudder'];
+  const MPS_TO_KT = 1.94384;
 
   type Mode = 'watch' | 'play';
 
@@ -94,6 +114,12 @@ import Footer from '../../components/Footer.astro';
   const resultsBodyEl = document.getElementById('af-results-body')!;
   const resultsCloseBtn = document.getElementById('af-results-close')!;
   const cameraToggleBtn = document.getElementById('af-camera-toggle')!;
+  const compassWindEl = document.getElementById('af-compass-wind')!;
+  const compassWindLabelEl = document.getElementById('af-compass-wind-label')!;
+  const compassCurrentEl = document.getElementById('af-compass-current')!;
+  const compassCurrentLabelEl = document.getElementById('af-compass-current-label')!;
+  const progressBlueEl = document.getElementById('af-progress-blue')!;
+  const progressRedEl = document.getElementById('af-progress-red')!;
 
   const STROKE_DURATION_S = 1.1; // matches ama-flow's oc6_stroke_config().duration_s -- sim time
   // Real-world OC6 crews hold about 50 strokes per minute; render at that pace regardless of
@@ -192,9 +218,14 @@ import Footer from '../../components/Footer.astro';
   });
 
   import('../../scripts/ama-flow/scene').then(({ AmaFlowScene }) => {
-    const scene = new AmaFlowScene(canvas, duel.conditions.wind_direction_rad, FINISH_DISTANCE_M);
+    const scene = new AmaFlowScene(canvas, duel.conditions, FINISH_DISTANCE_M);
     const resizeObserver = new ResizeObserver(() => scene.resize());
     resizeObserver.observe(canvas);
+
+    // Conditions are fixed for the episode, so the compass labels are set once; only each
+    // arrow's rotation (relative to the current view) changes per frame, below.
+    compassWindLabelEl.textContent = `wind ${(duel.conditions.wind_speed_mps * MPS_TO_KT).toFixed(0)} kt`;
+    compassCurrentLabelEl.textContent = `current ${(duel.conditions.current_speed_mps * MPS_TO_KT).toFixed(1)} kt`;
 
     let cameraMode: 'chase' | 'top' = 'chase';
     cameraToggleBtn.addEventListener('click', () => {
@@ -242,6 +273,10 @@ import Footer from '../../components/Footer.astro';
       }
       scene.render(elapsed, bluePlayerSide());
 
+      const viewUp = scene.viewUpAngleRad(bluePlayerSide());
+      compassWindEl.style.transform = `rotate(${compassRotationDeg(duel.conditions.wind_direction_rad, viewUp)}deg)`;
+      compassCurrentEl.style.transform = `rotate(${compassRotationDeg(duel.conditions.current_direction_rad, viewUp)}deg)`;
+
       const blueLabel = mode === 'watch' ? 'model' : 'you';
       const redLabel = mode === 'watch' ? 'baseline' : 'model';
       const blueErr = duel.history('player').headingErrorDeg.at(-1) ?? 0;
@@ -255,6 +290,11 @@ import Footer from '../../components/Footer.astro';
       };
       hudBlueEl.textContent = `blue (${blueLabel}): ${blueErr.toFixed(1)} deg${strokeText(blueAction)}`;
       hudRedEl.textContent = `red (${redLabel}): ${redErr.toFixed(1)} deg${strokeText(redAction)}`;
+
+      const progressPct = (side: SideId) =>
+        `${Math.max(0, Math.min(1, duel.distanceMadeGoodM(side) / FINISH_DISTANCE_M)) * 100}%`;
+      progressBlueEl.style.left = progressPct('player');
+      progressRedEl.style.left = progressPct('opponent');
     }
     requestAnimationFrame(frame);
   });

@@ -11,11 +11,14 @@ export interface WaveComponent {
   amplitude: number; // m
   wavenumber: number; // rad/m, k = 2*pi / wavelength
   angularSpeed: number; // rad/s
-  direction: [number, number]; // unit vector, world x/y
+  direction: [number, number]; // unit vector, three.js world (x, z) -- NOT sim (x, y)
 }
 
 /** Three swell components loosely aligned with the wind, with enough spread in wavelength and
- * direction to avoid a visibly repeating pattern.
+ * direction to avoid a visibly repeating pattern. `windDirectionRad` is in ama-flow's sim frame
+ * (CCW from +x); the returned directions are converted to three.js's (x, z) plane, where sim +y
+ * (port) is world -z -- the same convention scene.ts's setBoatState uses (threeZ = -y). Getting
+ * this backwards (a bug fixed here) made the swell travel opposite the wind.
  */
 export function defaultSwell(windDirectionRad: number): WaveComponent[] {
   const spreads = [0, 0.6, -0.9];
@@ -28,7 +31,7 @@ export function defaultSwell(windDirectionRad: number): WaveComponent[] {
       amplitude: amplitudes[i],
       wavenumber: (2 * Math.PI) / wavelengths[i],
       angularSpeed: speeds[i],
-      direction: [Math.cos(dir), Math.sin(dir)],
+      direction: [Math.cos(dir), -Math.sin(dir)],
     };
   });
 }
