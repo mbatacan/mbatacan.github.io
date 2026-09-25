@@ -4,7 +4,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 ## Project overview
 
-Static personal portfolio/blog site built with [Astro](https://astro.build) and hosted on GitHub Pages. Dark navy theme (`#222a68`), monospace (Courier Prime) font, no JavaScript framework.
+Static personal portfolio/blog site built with [Astro](https://astro.build) and hosted on GitHub Pages. Dark navy theme (`#161b33`), monospace (Courier Prime) font, no JavaScript framework.
 
 **This is a static site with no server.** Anything that needs a backend or a secret (a database, a hosted-LLM API call with your own key, etc.) doesn't belong here — it would either not work at all on GitHub Pages, or leak the secret into the public bundle. The `/lab` demos run entirely client-side for this reason: `fool-the-classifier` fetches its ONNX weights from a public CDN, and `rl-paddler` bundles a small trained policy's weights directly (`src/data/ama-flow/policy.json`) plus a from-scratch TypeScript port of the physics they run on — both do inference in the visitor's browser, nothing is sent anywhere.
 

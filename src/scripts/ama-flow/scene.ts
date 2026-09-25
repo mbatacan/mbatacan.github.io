@@ -5,14 +5,24 @@
 import * as THREE from 'three';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import { canoeOutlines, HULL_LENGTH_M } from '../../lib/ama-flow/canoe-geometry';
+import { PRESETS } from '../../lib/ama-flow/presets';
+import { seatSide } from '../../lib/ama-flow/physics';
 import { defaultSwell, waveHeight, waveSlope, type WaveComponent } from '../../lib/ama-flow/waves';
 
 export type CameraMode = 'chase' | 'top';
 export type BoatId = 'player' | 'opponent';
 
+interface CrewFigure {
+  group: THREE.Group;
+  paddle: THREE.Group;
+  torso: THREE.Mesh;
+}
+
 interface BoatVisual {
   group: THREE.Group;
   paddle: THREE.Group; // the steersman's paddle -- the only crew member the game controls
+  crew: CrewFigure[]; // seats 1-5 (bow to just-forward-of-steersman), animated by setCrewStroke
+  headingArrow: THREE.ArrowHelper; // scene-level, kept level regardless of hull pitch/roll
 }
 
 // Body-frame x of each seat, stern (steersman, seat 6) to bow (seat 1) -- mirrors the "steersman
@@ -40,6 +50,11 @@ const IAKO_COLOR = 0x8c8c8c;
 const BOAT_LANE_OFFSET_M: Record<BoatId, number> = { player: 5, opponent: -5 };
 const FINISH_LINE_HALF_WIDTH_M = 15;
 const FINISH_BUOY_HEIGHT_M = 3;
+const HEADING_ARROW_LENGTH_M = 12;
+const HEADING_ARROW_HEIGHT_M = 1.5; // above the hull, so it clears the swell and reads from above
+const CHASE_BACK_DISTANCE_M = HULL_LENGTH_M * 1.6;
+const CHASE_HEIGHT_M = 9;
+const CHASE_LOOK_AHEAD_M = 25; // puts the finish line ahead in frame instead of the boat's beam
 
 /** A checkered finish gate: two buoy poles and a bright line between them, so the race has a
  * visible endpoint instead of just running out over open, featureless water.
@@ -74,12 +89,53 @@ function shapeFromOutline(points: [number, number][]): THREE.Shape {
   return shape;
 }
 
-/** One paddler: a capsule torso plus a sphere head, bright enough to read clearly against the
- * dark hull. Purely decorative -- seats 1-5 never move, since only the steersman (seat 6) is
- * an actual action in the physics.
+/** A basic OC6 stroke, forward/draw/poke/rudder in the physics but rendered the same way for
+ * every crew seat (only the steersman's actual stroke type is known -- seats 1-5 are always
+ * assumed to paddle forward). Real outrigger crews paddle around 50 strokes per minute; the
+ * page drives `phase` at that rate (see rl-paddler.astro's STROKE_PERIOD_S).
+ *
+ * Returns `sweep` (-1 at the catch, forward in the water, to +1 at the exit, aft) and `lift`
+ * (0 = blade buried, 1 = fully clear of the water during recovery), both continuous across the
+ * phase 1 -> 0 wrap so consecutive strokes blend smoothly.
  */
-function buildCrewFigure(): THREE.Group {
-  const figure = new THREE.Group();
+export function forwardStrokePose(phase: number): { sweep: number; lift: number } {
+  const p = ((phase % 1) + 1) % 1;
+  if (p < 0.55) {
+    // Drive: blade planted, sweeping from the catch (forward) to the exit (aft).
+    const t = p / 0.55;
+    return { sweep: -1 + 2 * t, lift: 0 };
+  }
+  // Recovery: blade lifts clear, swings forward, and re-enters just as phase wraps to 0.
+  const t = (p - 0.55) / 0.45;
+  const lift = Math.sin(t * Math.PI); // 0 at exit and catch, peak mid-recovery
+  return { sweep: 1 - 2 * t, lift };
+}
+
+/** Poses a paddle (and optionally its figure's torso) from a stroke's side and its
+ * forwardStrokePose()-shaped sweep/lift, shared by every crew seat and the steersman's forward
+ * stroke. `side` is 0 (port) or 1 (starboard); port swings the blade to local -Z, matching the
+ * ama's port rigging.
+ */
+function applyPaddlePose(
+  paddle: THREE.Group,
+  torso: THREE.Mesh | null,
+  side: number,
+  sweep: number,
+  lift: number,
+): void {
+  const sideSign = side === 0 ? -1 : 1;
+  paddle.position.set(sweep * 0.35, 0.65 + lift * 0.35, sideSign * (0.55 + 0.1 * lift));
+  paddle.rotation.z = sideSign * 0.5;
+  paddle.rotation.x = -sweep * 0.3;
+  if (torso) torso.rotation.x = -sweep * 0.12; // slight forward lean at the catch
+}
+
+/** One paddler: a capsule torso, sphere head, and a small paddle, bright enough to read clearly
+ * against the dark hull. Seats 1-5 are always animated as a forward stroke (see
+ * forwardStrokePose) since the physics only tracks the steersman's actual stroke type.
+ */
+function buildCrewFigure(): CrewFigure {
+  const group = new THREE.Group();
   const torso = new THREE.Mesh(
     new THREE.CapsuleGeometry(0.22, 0.5, 4, 8),
     new THREE.MeshStandardMaterial({ color: CREW_SHIRT_COLOR }),
@@ -90,22 +146,24 @@ function buildCrewFigure(): THREE.Group {
     new THREE.MeshStandardMaterial({ color: CREW_SKIN_COLOR }),
   );
   head.position.y = 0.75;
-  figure.add(torso, head);
-  return figure;
+  const paddle = buildPaddleMesh(PADDLE_COLORS.forward);
+  paddle.position.y = 0.65;
+  group.add(torso, head, paddle);
+  return { group, paddle, torso };
 }
 
-/** The steersman's paddle: a shaft and blade, positioned to whichever side is currently
- * paddling and colored by stroke type -- read setStroke() for how it's animated per stroke.
+/** A paddle shaft plus blade, colored by stroke type. Shared by the steersman's paddle and
+ * every crew figure's paddle.
  */
-function buildSteersmanPaddle(): THREE.Group {
+function buildPaddleMesh(color: number): THREE.Group {
   const paddle = new THREE.Group();
   const shaft = new THREE.Mesh(
     new THREE.CylinderGeometry(0.03, 0.03, 1.4, 6),
-    new THREE.MeshStandardMaterial({ color: PADDLE_COLORS.forward }),
+    new THREE.MeshStandardMaterial({ color }),
   );
   const blade = new THREE.Mesh(
     new THREE.BoxGeometry(0.03, 0.5, 0.22),
-    new THREE.MeshStandardMaterial({ color: PADDLE_COLORS.forward }),
+    new THREE.MeshStandardMaterial({ color }),
   );
   blade.position.y = -0.9;
   paddle.add(shaft, blade);
@@ -117,14 +175,17 @@ function buildSteersmanPaddle(): THREE.Group {
 /** A low-poly OC6 glyph: hull, ama, two iako, six paddlers, and the steersman's paddle, laid on
  * the water plane. Body-frame +x is forward; the mesh is built in the X-Z plane (Y up) so a
  * Y-axis rotation by heading psi orients it exactly as ama_flow's own top-down glyph would (sim
- * +y/port -> -Z).
+ * +y/port -> -Z). The ama is rigged to port, as on a real OC6.
  */
 function buildCanoeMesh(hullColor: number): BoatVisual {
   const outlines = canoeOutlines();
   const group = new THREE.Group();
 
   function addPart(points: [number, number][], color: number, height: number, yOffset: number) {
-    const shape = shapeFromOutline(points.map(([x, y]) => [x, -y] as [number, number]));
+    // rotateX(-pi/2) below maps local (x, y) -> world (x, -y), so passing (x, y) unmapped here
+    // (rather than negating y first) puts sim +y (port) at world -z, i.e. to port -- matching
+    // setBoatState's threeZ = -y and the steersman paddle's port/-Z convention.
+    const shape = shapeFromOutline(points);
     const geometry = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false });
     geometry.rotateX(-Math.PI / 2); // extrude along Y after building flat in X-Z
     const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color }));
@@ -137,18 +198,30 @@ function buildCanoeMesh(hullColor: number): BoatVisual {
   addPart(outlines.forwardIako, IAKO_COLOR, 0.08, 0.35);
   addPart(outlines.aftIako, IAKO_COLOR, 0.08, 0.35);
 
-  for (const x of SEAT_X_POSITIONS) {
+  const seatFigures = SEAT_X_POSITIONS.map((x) => {
     const figure = buildCrewFigure();
-    figure.position.set(x, SEAT_HEIGHT_M, 0);
-    group.add(figure);
-  }
+    figure.group.position.set(x, SEAT_HEIGHT_M, 0);
+    group.add(figure.group);
+    return figure;
+  });
 
-  const paddle = buildSteersmanPaddle();
-  const steersmanX = SEAT_X_POSITIONS[SEAT_X_POSITIONS.length - 1];
-  paddle.position.set(steersmanX, SEAT_HEIGHT_M + 0.5, 0);
-  group.add(paddle);
+  // Seats 1-5 (bow to just forward of the steersman) always paddle forward -- the physics only
+  // tracks the steersman's actual stroke type/side, so that's the only one this game can animate
+  // accurately. The steersman (seat 6, stern) reuses this same figure's paddle, driven by
+  // setStroke() with the real action instead of setCrewStroke()'s always-forward animation.
+  const crew = seatFigures.slice(0, -1);
+  const steersman = seatFigures[seatFigures.length - 1];
 
-  return { group, paddle };
+  const headingArrow = new THREE.ArrowHelper(
+    new THREE.Vector3(1, 0, 0),
+    new THREE.Vector3(),
+    HEADING_ARROW_LENGTH_M,
+    hullColor,
+    HEADING_ARROW_LENGTH_M * 0.3,
+    HEADING_ARROW_LENGTH_M * 0.18,
+  );
+
+  return { group, paddle: steersman.paddle, crew, headingArrow };
 }
 
 const OCEAN_VERTEX_SHADER = /* glsl */ `
@@ -288,6 +361,7 @@ export class AmaFlowScene {
       opponent: buildCanoeMesh(HULL_COLORS.opponent),
     };
     this.scene.add(this.boats.player.group, this.boats.opponent.group);
+    this.scene.add(this.boats.player.headingArrow, this.boats.opponent.headingArrow);
     this.scene.add(buildFinishLine(finishDistanceM));
 
     this.resize();
@@ -298,7 +372,8 @@ export class AmaFlowScene {
   }
 
   /** Place a boat at world (x, y) [ama-flow's sim frame] and heading psi (rad), resting on the
-   * cosmetic swell at elapsedSeconds.
+   * cosmetic swell at elapsedSeconds. Also updates that boat's heading arrow, since the water
+   * makes the hull's own orientation hard to read at a glance.
    */
   setBoatState(which: BoatId, x: number, y: number, psi: number, elapsedSeconds: number): void {
     const threeX = x;
@@ -311,21 +386,46 @@ export class AmaFlowScene {
     // Small pitch/roll from the local wave slope along the boat's forward/lateral axes.
     group.rotateOnWorldAxis(new THREE.Vector3(0, 0, 1), Math.atan(slopeX) * 0.4);
     group.rotateOnWorldAxis(new THREE.Vector3(1, 0, 0), Math.atan(slopeZ) * 0.4);
+
+    const arrow = this.boats[which].headingArrow;
+    arrow.position.set(threeX, height + HEADING_ARROW_HEIGHT_M, threeZ);
+    arrow.setDirection(new THREE.Vector3(Math.cos(psi), 0, -Math.sin(psi))); // sim +y/port -> world -z
+  }
+
+  /** Animate the always-forward-paddling crew (seats 1-5) in sync: alternating sides per
+   * ama-flow's seatSide/hut logic, sweeping through the drive and lifting clear on recovery.
+   * The steersman (seat 6) is animated separately by setStroke(), since only their stroke is an
+   * actual action in the physics.
+   */
+  setCrewStroke(which: BoatId, strokeIndex: number, phase: number): void {
+    const { sweep, lift } = forwardStrokePose(phase);
+    this.boats[which].crew.forEach((figure, seat) => {
+      const side = seatSide(PRESETS.crew, seat, strokeIndex);
+      applyPaddlePose(figure.paddle, figure.torso, side, sweep, lift);
+    });
   }
 
   /** Animate the steersman's paddle for the current stroke: which side (0 = port, 1 =
    * starboard), which of the four stroke types, and phase in [0, 1) for progress through it.
-   * This is the one crew member the game actually controls, so it's the one worth animating.
+   * This is the one crew member whose actual action the game controls, so it's the one animated
+   * with the real stroke type rather than always-forward.
    */
   setStroke(which: BoatId, side: number, strokeType: number, phase: number): void {
     const paddle = this.boats[which].paddle;
-    const sideSign = side === 0 ? -1 : 1; // port -> local -Z, starboard -> local +Z
-    const swing = Math.sin(Math.min(phase, 1) * Math.PI); // 0 at catch/release, peak mid-stroke
-    paddle.position.z = sideSign * (0.55 + 0.15 * swing);
-    paddle.rotation.z = sideSign * 0.5;
-    paddle.rotation.x = -0.3 + 0.5 * swing;
-
     const key = STROKE_TYPE_KEYS[strokeType] ?? 'forward';
+    if (key === 'forward') {
+      const { sweep, lift } = forwardStrokePose(phase);
+      applyPaddlePose(paddle, null, side, sweep, lift);
+    } else {
+      // Draw/poke/rudder don't have a drive/recovery cycle in the physics -- just show the
+      // blade planted on the working side with a small flourish through the stroke.
+      const sideSign = side === 0 ? -1 : 1; // port -> local -Z, starboard -> local +Z
+      const swing = Math.sin(Math.min(phase, 1) * Math.PI); // 0 at start/end, peak mid-stroke
+      paddle.position.set(0, 0.65, sideSign * (0.55 + 0.15 * swing));
+      paddle.rotation.z = sideSign * 0.5;
+      paddle.rotation.x = -0.3 + 0.5 * swing;
+    }
+
     const color = PADDLE_COLORS[key];
     const blade = paddle.userData.blade as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
     const shaft = paddle.userData.shaft as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
@@ -344,14 +444,22 @@ export class AmaFlowScene {
       this.cameraPosition.lerp(desiredPos, 0.08);
       this.cameraTarget.lerp(desiredTarget, 0.08);
     } else {
-      const forward = new THREE.Vector3(0, 0, HULL_LENGTH_M).applyEuler(
-        this.boats[focus].group.rotation,
-      );
-      const desiredPos = focused.clone().sub(forward.multiplyScalar(1.6)).add(
-        new THREE.Vector3(0, 9, 0),
-      );
+      // Body-frame +x is forward (see buildCanoeMesh), so the chase cam sits behind the boat
+      // along -x and looks toward a point ahead of it, putting the finish line in view instead
+      // of the boat's beam.
+      const forward = new THREE.Vector3(1, 0, 0)
+        .applyEuler(this.boats[focus].group.rotation)
+        .normalize();
+      const desiredPos = focused
+        .clone()
+        .sub(forward.clone().multiplyScalar(CHASE_BACK_DISTANCE_M))
+        .add(new THREE.Vector3(0, CHASE_HEIGHT_M, 0));
+      const desiredTarget = focused
+        .clone()
+        .add(forward.clone().multiplyScalar(CHASE_LOOK_AHEAD_M))
+        .add(new THREE.Vector3(0, 2, 0));
       this.cameraPosition.lerp(desiredPos, 0.08);
-      this.cameraTarget.lerp(focused, 0.08);
+      this.cameraTarget.lerp(desiredTarget, 0.08);
     }
     this.camera.position.copy(this.cameraPosition);
     // lookAt is degenerate when the view direction is (anti)parallel to camera.up -- exactly

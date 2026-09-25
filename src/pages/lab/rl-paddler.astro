@@ -95,9 +95,11 @@ import Footer from '../../components/Footer.astro';
   const resultsCloseBtn = document.getElementById('af-results-close')!;
   const cameraToggleBtn = document.getElementById('af-camera-toggle')!;
 
-  const STROKE_DURATION_S = 1.1; // matches ama-flow's oc6_stroke_config().duration_s
-  const WATCH_SPEED = 2.5; // sim-seconds per real second; Watch has no input to time against
-  const PLAY_SPEED = 1.3;
+  const STROKE_DURATION_S = 1.1; // matches ama-flow's oc6_stroke_config().duration_s -- sim time
+  // Real-world OC6 crews hold about 50 strokes per minute; render at that pace regardless of
+  // mode (Play previously ran slower than Watch, neither matched a real cadence).
+  const STROKE_PERIOD_S = 60 / 50; // real seconds per stroke
+  const SPEED = STROKE_DURATION_S / STROKE_PERIOD_S; // sim-seconds per real second
 
   let mode: Mode = 'watch';
   let duel = new Duel();
@@ -211,8 +213,7 @@ import Footer from '../../components/Footer.astro';
       lastTimeMs = timeMs;
 
       if (running) {
-        const speed = mode === 'watch' ? WATCH_SPEED : PLAY_SPEED;
-        clockS += dtS * speed;
+        clockS += dtS * SPEED;
         while (clockS >= STROKE_DURATION_S) {
           clockS -= STROKE_DURATION_S;
           if (!(duel.isDone('player') && duel.isDone('opponent'))) stepOneStroke();
@@ -237,6 +238,7 @@ import Footer from '../../components/Footer.astro';
           const { side: paddleSide, strokeType } = decodeAction(lastAction);
           scene.setStroke(side, paddleSide, strokeType, duel.isDone(side) ? 0 : t);
         }
+        scene.setCrewStroke(side, duel.history(side).actions.length, duel.isDone(side) ? 0 : t);
       }
       scene.render(elapsed, bluePlayerSide());
 
