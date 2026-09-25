@@ -398,3 +398,140 @@ footer {
 .lab-bar-pct {
   text-align: right;
 }
+
+/* ── Lab: Race an RL Paddler ─────────────────────── */
+.af-intro {
+  line-height: 1.7;
+}
+
+.af-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.af-tab {
+  font-family: inherit;
+  font-size: 0.9rem;
+  color: white;
+  background: transparent;
+  border: 1px solid white;
+  border-radius: 4px;
+  padding: 6px 14px;
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.af-tab[aria-selected='true'] {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.af-game {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.af-canvas-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-width: 280px;
+}
+
+.af-canvas {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #04101c;
+  border: 2px solid white;
+  border-radius: 8px;
+  display: block;
+}
+
+.af-hud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 0.85rem;
+}
+
+.af-hud-item--blue {
+  color: #8b8bff;
+}
+
+.af-hud-item--red {
+  color: #e05a5a;
+}
+
+.af-status {
+  min-height: 1.4rem;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.af-controls-col {
+  flex: 0 1 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  line-height: 1.6;
+  font-size: 0.9rem;
+}
+
+.af-blue {
+  color: #8b8bff;
+}
+
+.af-red {
+  color: #e05a5a;
+}
+
+.af-keys {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+
+.af-keys kbd {
+  font-family: inherit;
+  border: 1px solid white;
+  border-radius: 4px;
+  padding: 1px 7px;
+  margin-right: 4px;
+}
+
+.af-hint {
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+
+.af-button {
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: white;
+  background: transparent;
+  border: 1px solid white;
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.af-button:hover {
+  opacity: 0.8;
+}
+
+.af-results {
+  margin-top: 20px;
+  border: 2px solid white;
+  border-radius: 8px;
+  padding: 16px;
+  line-height: 1.6;
+}
