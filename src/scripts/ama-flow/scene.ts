@@ -150,8 +150,10 @@ function applyPaddlePose(
   // The paddle's default cylinder axis is local Y (vertical). Rotating about local X tips Y
   // toward Z (lateral -- out to the paddling side); rotating about local Z tips Y toward X
   // (fore-aft -- the stroke's sweep). These were swapped before, which made every paddle point
-  // forward along the hull instead of out to the side into the water.
-  paddle.rotation.x = sideSign * 0.5;
+  // forward along the hull instead of out to the side into the water. The lateral tip is a
+  // shallow cant (~10 deg), not a hard lean -- a real paddle is held close to vertical, angled
+  // only slightly outward from the top hand to the blade in the water.
+  paddle.rotation.x = sideSign * 0.18;
   paddle.rotation.z = -sweep * 0.3;
   if (torso) torso.rotation.x = -sweep * 0.12; // slight forward lean at the catch
 }
@@ -533,7 +535,7 @@ export class AmaFlowScene {
       const sideSign = side === 0 ? -1 : 1; // port -> local -Z, starboard -> local +Z
       const swing = Math.sin(Math.min(phase, 1) * Math.PI); // 0 at start/end, peak mid-stroke
       paddle.position.set(0, 0.65, sideSign * (0.55 + 0.15 * swing));
-      paddle.rotation.x = sideSign * 0.5; // tip out to the paddling side (see applyPaddlePose)
+      paddle.rotation.x = sideSign * 0.18; // a shallow cant, not a hard lean (see applyPaddlePose)
       paddle.rotation.z = -0.3 + 0.5 * swing;
     }
 

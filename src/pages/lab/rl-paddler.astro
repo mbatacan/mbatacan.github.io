@@ -20,6 +20,14 @@ import Footer from '../../components/Footer.astro';
       tiny re-implementation of the trained policy's neural net, checked against the Python
       original stroke by stroke. Nothing is sent anywhere; everything below runs in your browser.
     </p>
+    <p id="af-legend-watch" class="af-legend">
+      <strong class="af-blue">blue</strong> is the trained PPO model &middot;
+      <strong class="af-red">red</strong> is the hand-coded baseline steersman.
+    </p>
+    <p id="af-legend-play" class="af-legend" hidden>
+      <strong class="af-blue">blue</strong> is you &middot;
+      <strong class="af-red">red</strong> is the trained PPO model.
+    </p>
   </div>
 
   <div class="af-tabs" role="tablist">
@@ -50,10 +58,6 @@ import Footer from '../../components/Footer.astro';
           </div>
         </div>
         <canvas id="af-minimap" class="af-minimap" width="120" height="120"></canvas>
-        <div class="af-status-hud">
-          <div id="af-hud-blue" class="af-status-hud-item af-status-hud-item--blue">blue: —</div>
-          <div id="af-hud-red" class="af-status-hud-item af-status-hud-item--red">red: —</div>
-        </div>
         <div id="af-control-hud" class="af-control-hud" hidden>
           <div class="af-control-hud-row">
             <span id="af-control-key-side-0" class="af-control-key">port</span>
@@ -66,9 +70,17 @@ import Footer from '../../components/Footer.astro';
             <span id="af-control-key-stroke-3" class="af-control-key">rudder</span>
           </div>
         </div>
+        <div id="af-results" class="af-results" hidden>
+          <h3 id="af-results-title">Race over</h3>
+          <p id="af-results-body"></p>
+          <button id="af-results-close" class="af-button" type="button">close</button>
+        </div>
       </div>
       <div class="af-hud">
+        <span id="af-hud-blue" class="af-hud-item af-hud-item--blue">blue: —</span>
+        <span id="af-hud-red" class="af-hud-item af-hud-item--red">red: —</span>
         <span id="af-hud-stroke" class="af-hud-item">stroke 0/0</span>
+        <button id="af-restart" class="af-camera-toggle" type="button">restart</button>
         <button id="af-speed-toggle" class="af-camera-toggle" type="button">1x speed</button>
         <button id="af-camera-toggle" class="af-camera-toggle" type="button">top-down view</button>
       </div>
@@ -76,15 +88,7 @@ import Footer from '../../components/Footer.astro';
     </div>
 
     <div class="af-controls-col">
-      <div id="af-controls-watch" class="af-controls-panel">
-        <p><strong class="af-blue">blue</strong> is the trained PPO model.</p>
-        <p><strong class="af-red">red</strong> is the hand-coded baseline steersman.</p>
-        <button id="af-restart-watch" class="af-button" type="button">restart</button>
-      </div>
-
       <div id="af-controls-play" class="af-controls-panel" hidden>
-        <p><strong class="af-blue">blue</strong> is you.</p>
-        <p><strong class="af-red">red</strong> is the trained PPO model.</p>
         <ul class="af-keys">
           <li><kbd>&larr;</kbd> paddle port</li>
           <li><kbd>&rarr;</kbd> paddle starboard</li>
@@ -92,15 +96,8 @@ import Footer from '../../components/Footer.astro';
         </ul>
         <p class="af-hint">Your current selection fires automatically every stroke -- there's no separate "paddle" key. It's also highlighted at the bottom of the view, so you don't have to look away.</p>
         <p class="af-hint">The green compass arrow points where to steer; wind and current show the same way. The small map in the corner shows the whole course.</p>
-        <button id="af-start-play" class="af-button" type="button">restart</button>
       </div>
     </div>
-  </div>
-
-  <div id="af-results" class="af-results" hidden>
-    <h3 id="af-results-title">Race over</h3>
-    <p id="af-results-body"></p>
-    <button id="af-results-close" class="af-button" type="button">close</button>
   </div>
 
   <Footer />
@@ -134,10 +131,10 @@ import Footer from '../../components/Footer.astro';
   const hudStrokeEl = document.getElementById('af-hud-stroke')!;
   const tabWatch = document.getElementById('af-tab-watch')!;
   const tabPlay = document.getElementById('af-tab-play')!;
-  const controlsWatch = document.getElementById('af-controls-watch')!;
   const controlsPlay = document.getElementById('af-controls-play')!;
-  const restartWatchBtn = document.getElementById('af-restart-watch')!;
-  const startPlayBtn = document.getElementById('af-start-play')!;
+  const legendWatchEl = document.getElementById('af-legend-watch')!;
+  const legendPlayEl = document.getElementById('af-legend-play')!;
+  const restartBtn = document.getElementById('af-restart')!;
   const resultsEl = document.getElementById('af-results')!;
   const resultsTitleEl = document.getElementById('af-results-title')!;
   const resultsBodyEl = document.getElementById('af-results-body')!;
@@ -218,16 +215,38 @@ import Footer from '../../components/Footer.astro';
     const redRms = duel.rmsHeadingErrorDeg(redOpponentSide());
     const blueVmg = duel.distanceMadeGoodM(bluePlayerSide());
     const redVmg = duel.distanceMadeGoodM(redOpponentSide());
-    const winner =
-      blueRms < redRms && blueVmg > redVmg
-        ? `blue (${blueLabel})`
-        : redRms < blueRms && redVmg > blueVmg
-          ? `red (${redLabel})`
-          : 'no clean winner';
-    resultsTitleEl.textContent = winner.startsWith('no') ? "It's close" : `${winner} wins`;
+    const distanceGapM = Math.abs(blueVmg - redVmg);
+    // Each side's own stroke count, not a shared one -- whichever side finished the course in
+    // fewer strokes was actually faster on average, and that's a real signal (the race only ends
+    // once *both* are done, so a side that finishes early just stops accumulating strokes).
+    const blueAvgSpeedKt = (blueVmg / (duel.history('player').actions.length * STROKE_DURATION_S)) * MPS_TO_KT;
+    const redAvgSpeedKt = (redVmg / (duel.history('opponent').actions.length * STROKE_DURATION_S)) * MPS_TO_KT;
+
+    // Always declare a winner with a concrete margin, rather than only when one side dominates
+    // both metrics (that gave a vague "it's close" even when the numbers clearly differed).
+    // Whoever covered more of the course wins outright; if both finished (the common case, where
+    // distanceMadeGoodM caps at COURSE_LENGTH_M for anyone who completes it), fall back to
+    // whoever held heading tighter.
+    const blueWins = distanceGapM > 0 ? blueVmg > redVmg : blueRms < redRms;
+    const winnerName = blueWins ? `blue (${blueLabel})` : `red (${redLabel})`;
+    const margin =
+      distanceGapM > 0
+        ? `${distanceGapM.toFixed(0)} m further along the course`
+        : (() => {
+            const better = Math.min(blueRms, redRms);
+            const worse = Math.max(blueRms, redRms);
+            return `${(((worse - better) / worse) * 100).toFixed(0)}% tighter heading control (tied on distance)`;
+          })();
+
+    resultsTitleEl.textContent = `${winnerName} wins`;
+    // "made good" is sailing jargon for actual progress toward the goal (vs. raw distance
+    // traveled, which drifting off course would inflate) -- spelled out here instead.
     resultsBodyEl.textContent =
-      `blue (${blueLabel}): ${blueRms.toFixed(1)} deg RMS error, ${blueVmg.toFixed(0)} m made good. ` +
-      `red (${redLabel}): ${redRms.toFixed(1)} deg RMS error, ${redVmg.toFixed(0)} m made good.`;
+      `${winnerName} wins by ${margin}. ` +
+      `blue (${blueLabel}): ${blueRms.toFixed(1)} deg avg heading error, ` +
+      `${blueVmg.toFixed(0)}/${COURSE_LENGTH_M} m covered, ${blueAvgSpeedKt.toFixed(1)} kt avg speed. ` +
+      `red (${redLabel}): ${redRms.toFixed(1)} deg avg heading error, ` +
+      `${redVmg.toFixed(0)}/${COURSE_LENGTH_M} m covered, ${redAvgSpeedKt.toFixed(1)} kt avg speed.`;
     resultsEl.hidden = false;
   }
 
@@ -256,8 +275,9 @@ import Footer from '../../components/Footer.astro';
     mode = next;
     tabWatch.setAttribute('aria-selected', String(next === 'watch'));
     tabPlay.setAttribute('aria-selected', String(next === 'play'));
-    controlsWatch.hidden = next !== 'watch';
     controlsPlay.hidden = next !== 'play';
+    legendWatchEl.hidden = next !== 'watch';
+    legendPlayEl.hidden = next !== 'play';
     hudBlueEl.textContent = next === 'watch' ? 'blue (model): —' : 'blue (you): —';
     hudRedEl.textContent = next === 'watch' ? 'red (baseline): —' : 'red (model): —';
     speedToggleBtn.hidden = next !== 'watch';
@@ -269,8 +289,7 @@ import Footer from '../../components/Footer.astro';
 
   tabWatch.addEventListener('click', () => setMode('watch'));
   tabPlay.addEventListener('click', () => setMode('play'));
-  restartWatchBtn.addEventListener('click', restart);
-  startPlayBtn.addEventListener('click', restart);
+  restartBtn.addEventListener('click', restart);
   resultsCloseBtn.addEventListener('click', () => (resultsEl.hidden = true));
 
   window.addEventListener('keydown', (e) => {
