@@ -46,24 +46,40 @@ const LOST_HEADING_STROKES = 10;
 
 // A short turn-buoy course rather than a straight line, so the boat has to hold two different
 // headings (and therefore use both port and starboard corrective strokes) instead of drifting
-// the same way all race. The 80 deg turn at the buoy (two 40 deg legs off world +x) is chosen
-// from src/lib/ama-flow/__tests__/waypoint-turn-spike.test.ts, which found the trained model
-// holds together up to ~90-110 deg of sudden mid-episode target change before reliably losing
-// heading past ~130 deg -- 80 deg leaves it comfortable margin.
-// 100m/leg (200m total) rather than the ~297m a straight line covers in EPISODE_STROKES: the
-// turn costs real distance (heading error spikes and takes strokes to recover, so less thrust
+// the same way all race. Leg 1's bearing is 0 deg -- exactly ama-flow's own TARGET_HEADING, so
+// the race starts in the same regime the model was actually benchmarked in, with no artificial
+// transient before the boat has even settled. An earlier version used two 40 deg legs off +x,
+// which put an unnecessary 40 deg offset right at the start on top of the turn -- both
+// transients stacked made the RMS error shown in the HUD/results look far worse than the
+// model's actual steady-state control (which holds within a few degrees on a straight leg).
+//
+// The buoy turn's angle was swept empirically (100 random-seed races per angle):
+//   50 deg: 0 lost, 100 finished, avg RMS 16.0   <- chosen
+//   60 deg: 0 lost, 100 finished, avg RMS 20.0
+//   70 deg: 0 lost,  99 finished, avg RMS 24.2
+//   80 deg: 0 lost,  91 finished, avg RMS 28.6
+// None of these ever lose heading (the model can physically survive up to ~90-110 deg per
+// src/lib/ama-flow/__tests__/waypoint-turn-spike.test.ts), but recovery from a sharp turn takes
+// real strokes -- an 80 deg turn eats so much of the remaining leg that some races time out
+// before reaching the finish, and the transient dominates the RMS the whole way. 50 deg is a
+// real, visible turn that still leaves room to fully recover and finish cleanly.
+// Leg lengths (200m total) are shorter than the ~297m a straight line covers in EPISODE_STROKES:
+// the turn costs real distance (heading error spikes and takes strokes to recover, so less thrust
 // goes to forward progress for a while), confirmed empirically -- a 150m/leg course only reached
 // ~255-257m of its 300m total by stroke 90, finishing well short.
-const COURSE_LEG_LENGTH_M = 100;
-const COURSE_TURN_BEARING_DEG = 40;
+const COURSE_LEGS: { bearingDeg: number; lengthM: number }[] = [
+  { bearingDeg: 0, lengthM: 120 },
+  { bearingDeg: -50, lengthM: 80 },
+];
 export const COURSE_WAYPOINTS: [number, number][] = (() => {
-  const b = (COURSE_TURN_BEARING_DEG * Math.PI) / 180;
-  const turnBuoy: [number, number] = [COURSE_LEG_LENGTH_M * Math.cos(b), COURSE_LEG_LENGTH_M * Math.sin(b)];
-  const finish: [number, number] = [
-    turnBuoy[0] + COURSE_LEG_LENGTH_M * Math.cos(-b),
-    turnBuoy[1] + COURSE_LEG_LENGTH_M * Math.sin(-b),
-  ];
-  return [turnBuoy, finish];
+  const waypoints: [number, number][] = [];
+  let position: [number, number] = [0, 0];
+  for (const leg of COURSE_LEGS) {
+    const rad = (leg.bearingDeg * Math.PI) / 180;
+    position = [position[0] + leg.lengthM * Math.cos(rad), position[1] + leg.lengthM * Math.sin(rad)];
+    waypoints.push(position);
+  }
+  return waypoints;
 })();
 
 /** Total course length (sum of leg lengths, start -> each waypoint in order), for the HUD

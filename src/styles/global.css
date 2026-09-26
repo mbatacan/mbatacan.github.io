@@ -496,43 +496,90 @@ footer {
   left: 16px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-}
-
-.af-compass-item {
-  display: flex;
   align-items: center;
   gap: 6px;
-  background: rgba(0, 0, 0, 0.4);
-  border-radius: 4px;
-  padding: 4px 8px;
 }
 
-.af-compass-arrow {
+.af-compass-rose {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+/* A fixed tick at the top marking the boat's own forward direction, since every needle below is
+   drawn relative to it (rotate(0deg) means "dead ahead"). */
+.af-compass-rose-marker {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
   width: 0;
   height: 0;
-  border-left: 6px solid transparent;
-  border-right: 6px solid transparent;
-  border-bottom: 14px solid currentColor;
-  flex-shrink: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-bottom: 6px solid rgba(255, 255, 255, 0.6);
 }
 
-.af-compass-arrow--wind {
-  color: #ffffff;
+/* Each needle pivots at the dial's center (transform-origin: bottom) and points outward toward
+   the rim at rotate(0deg) -- the same "0 = up" convention compassRotationDeg's callers assume. */
+.af-compass-needle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  margin-left: -5px;
+  margin-top: -34px;
+  transform-origin: 50% 34px;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 34px solid currentColor;
 }
 
-.af-compass-arrow--current {
-  color: #59d6ff;
-}
-
-.af-compass-arrow--target {
+.af-compass-needle--target {
   color: #4ade80;
 }
 
-.af-compass-label {
-  font-size: 0.75rem;
+.af-compass-needle--wind {
+  color: #ffffff;
+}
+
+.af-compass-needle--current {
+  color: #59d6ff;
+}
+
+.af-compass-legend {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 110px;
+}
+
+.af-compass-legend-item {
+  font-size: 0.65rem;
   color: white;
   white-space: nowrap;
+}
+
+.af-compass-legend-item::before {
+  content: '●';
+  margin-right: 3px;
+}
+
+.af-compass-legend-item--target::before {
+  color: #4ade80;
+}
+
+.af-compass-legend-item--wind::before {
+  color: #ffffff;
+}
+
+.af-compass-legend-item--current::before {
+  color: #59d6ff;
 }
 
 .af-minimap {

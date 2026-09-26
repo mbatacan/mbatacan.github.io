@@ -37,17 +37,16 @@ import Footer from '../../components/Footer.astro';
       <div class="af-canvas-wrap">
         <canvas id="af-canvas" class="af-canvas"></canvas>
         <div class="af-compass">
-          <div class="af-compass-item">
-            <div id="af-compass-target" class="af-compass-arrow af-compass-arrow--target"></div>
-            <span class="af-compass-label">steer here</span>
+          <div class="af-compass-rose">
+            <div class="af-compass-rose-marker"></div>
+            <div id="af-compass-target" class="af-compass-needle af-compass-needle--target"></div>
+            <div id="af-compass-wind" class="af-compass-needle af-compass-needle--wind"></div>
+            <div id="af-compass-current" class="af-compass-needle af-compass-needle--current"></div>
           </div>
-          <div class="af-compass-item">
-            <div id="af-compass-wind" class="af-compass-arrow af-compass-arrow--wind"></div>
-            <span id="af-compass-wind-label" class="af-compass-label">wind —</span>
-          </div>
-          <div class="af-compass-item">
-            <div id="af-compass-current" class="af-compass-arrow af-compass-arrow--current"></div>
-            <span id="af-compass-current-label" class="af-compass-label">current —</span>
+          <div class="af-compass-legend">
+            <span class="af-compass-legend-item af-compass-legend-item--target">steer</span>
+            <span id="af-compass-wind-label" class="af-compass-legend-item af-compass-legend-item--wind">wind —</span>
+            <span id="af-compass-current-label" class="af-compass-legend-item af-compass-legend-item--current">current —</span>
           </div>
         </div>
         <canvas id="af-minimap" class="af-minimap" width="120" height="120"></canvas>
@@ -68,6 +67,7 @@ import Footer from '../../components/Footer.astro';
         <span id="af-hud-blue" class="af-hud-item af-hud-item--blue">blue: —</span>
         <span id="af-hud-red" class="af-hud-item af-hud-item--red">red: —</span>
         <span id="af-hud-stroke" class="af-hud-item">stroke 0/0</span>
+        <button id="af-speed-toggle" class="af-camera-toggle" type="button">1x speed</button>
         <button id="af-camera-toggle" class="af-camera-toggle" type="button">top-down view</button>
       </div>
       <div id="af-status" class="af-status">loading…</div>
@@ -114,7 +114,7 @@ import Footer from '../../components/Footer.astro';
     randomConditions,
     type SideId,
   } from '../../scripts/ama-flow/game';
-  import { decodeAction, lerpState, type State } from '../../lib/ama-flow/physics';
+  import { decodeAction, headingError, lerpState, type State } from '../../lib/ama-flow/physics';
   import { compassRotationDeg } from '../../lib/ama-flow/compass';
   import { drawMinimap } from '../../scripts/ama-flow/minimap';
   import type { AmaFlowScene } from '../../scripts/ama-flow/scene';
@@ -141,6 +141,7 @@ import Footer from '../../components/Footer.astro';
   const resultsBodyEl = document.getElementById('af-results-body')!;
   const resultsCloseBtn = document.getElementById('af-results-close')!;
   const cameraToggleBtn = document.getElementById('af-camera-toggle')!;
+  const speedToggleBtn = document.getElementById('af-speed-toggle')!;
   const compassTargetEl = document.getElementById('af-compass-target')!;
   const compassWindEl = document.getElementById('af-compass-wind')!;
   const compassWindLabelEl = document.getElementById('af-compass-wind-label')!;
@@ -169,6 +170,21 @@ import Footer from '../../components/Footer.astro';
   let clockS = 0;
   let lastTimeMs: number | null = null;
   const control = { side: 0, strokeType: 0 }; // PORT forward, until the player changes it
+
+  // The minimap's heading-up rotation is smoothed rather than following the player's raw heading
+  // 1:1 -- every small steering correction changes psi a little, so an unsmoothed map visibly
+  // swims/spins every stroke instead of only reorienting for the one real turn in the course.
+  let smoothedHeadingRad = 0;
+
+  // Watch-only playback speed multiplier -- Play always runs at 1x, so the controls feel
+  // consistent regardless of what Watch was last left at.
+  const SPEED_MULTIPLIERS = [1, 2, 4];
+  let speedMultiplier = 1;
+  speedToggleBtn.addEventListener('click', () => {
+    const i = SPEED_MULTIPLIERS.indexOf(speedMultiplier);
+    speedMultiplier = SPEED_MULTIPLIERS[(i + 1) % SPEED_MULTIPLIERS.length];
+    speedToggleBtn.textContent = `${speedMultiplier}x speed`;
+  });
 
   function bluePlayerSide(): SideId {
     return 'player'; // blue is always the "player" slot: the model in Watch, you in Play
@@ -223,6 +239,7 @@ import Footer from '../../components/Footer.astro';
     duel = new Duel(randomConditions(seed), seed);
     clockS = 0;
     lastTimeMs = null;
+    smoothedHeadingRad = 0; // matches the initial heading every episode starts at
     resultsEl.hidden = true;
     running = true;
     scene?.setConditions(duel.conditions);
@@ -247,6 +264,9 @@ import Footer from '../../components/Footer.astro';
     controlsPlay.hidden = next !== 'play';
     hudBlueEl.textContent = next === 'watch' ? 'blue (model): —' : 'blue (you): —';
     hudRedEl.textContent = next === 'watch' ? 'red (baseline): —' : 'red (model): —';
+    speedToggleBtn.hidden = next !== 'watch';
+    speedMultiplier = 1;
+    speedToggleBtn.textContent = '1x speed';
     updateControlHud();
     restart();
   }
@@ -299,7 +319,7 @@ import Footer from '../../components/Footer.astro';
       lastTimeMs = timeMs;
 
       if (running) {
-        clockS += dtS * SPEED;
+        clockS += dtS * SPEED * speedMultiplier;
         while (clockS >= STROKE_DURATION_S) {
           clockS -= STROKE_DURATION_S;
           if (!(duel.isDone('player') && duel.isDone('opponent'))) stepOneStroke();
@@ -339,10 +359,17 @@ import Footer from '../../components/Footer.astro';
       const targetHeadingRad = duel.currentTargetHeadingRad(bluePlayerSide());
       compassTargetEl.style.transform = `rotate(${compassRotationDeg(targetHeadingRad, viewUp)}deg)`;
 
-      drawMinimap(minimapCanvas, [
-        { x: renderStates.player[0], y: renderStates.player[1], headingRad: renderStates.player[2], color: '#8b8bff' },
-        { x: renderStates.opponent[0], y: renderStates.opponent[1], headingRad: renderStates.opponent[2], color: '#e05a5a' },
-      ]);
+      // Ease toward the player's actual heading rather than snapping to it -- see
+      // smoothedHeadingRad's declaration for why.
+      smoothedHeadingRad += headingError(renderStates.player[2], smoothedHeadingRad) * 0.03;
+      drawMinimap(
+        minimapCanvas,
+        [
+          { x: renderStates.player[0], y: renderStates.player[1], headingRad: renderStates.player[2], color: '#8b8bff' },
+          { x: renderStates.opponent[0], y: renderStates.opponent[1], headingRad: renderStates.opponent[2], color: '#e05a5a' },
+        ],
+        smoothedHeadingRad, // heading-up: the map slowly reorients to keep the player pointing up
+      );
 
       const blueLabel = mode === 'watch' ? 'model' : 'you';
       const redLabel = mode === 'watch' ? 'baseline' : 'model';
