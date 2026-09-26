@@ -14,31 +14,19 @@ const BOAT_DOT_RADIUS_PX = 4;
 const BOAT_TICK_LENGTH_PX = 9;
 
 /** Draws the course (start -> each waypoint) and both boats' positions/headings, scaled to fit
- * the canvas. The base mapping is sim +y "up" (canvas -y), matching the 3D top-down camera's own
- * convention (see AmaFlowScene.viewUpAngleRad). When `headingUpRad` is given (the player's
- * current heading), the whole map is rotated about its center so that direction points up
- * instead -- a "heading-up" mode, like a car GPS, so the map always agrees with "forward" in
- * chase view regardless of which way the course actually runs in the world.
+ * the canvas. Sim +y is drawn "up" (canvas -y), matching the 3D top-down camera's own convention
+ * (see AmaFlowScene.viewUpAngleRad). Deliberately a fixed orientation, not heading-up: rotating
+ * the map with the player's heading was tried and reverted -- even smoothed, the constant small
+ * steering corrections made the whole map visibly swim rather than only reorienting for the
+ * course's one real turn.
  */
-export function drawMinimap(canvas: HTMLCanvasElement, boats: MinimapBoat[], headingUpRad?: number): void {
+export function drawMinimap(canvas: HTMLCanvasElement, boats: MinimapBoat[]): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   const { width, height } = canvas;
   ctx.clearRect(0, 0, width, height);
-  // Filled before any rotation, so the background always covers the full (axis-aligned) canvas
-  // -- rotating a fill of the same square would leave its corners uncovered at most angles.
   ctx.fillStyle = 'rgba(4, 16, 28, 0.75)';
   ctx.fillRect(0, 0, width, height);
-
-  ctx.save();
-  if (headingUpRad !== undefined) {
-    // toCanvas() below maps sim direction d to the canvas vector (cos d, -sin d) -- i.e. sim +y
-    // (d = pi/2) lands on canvas "up". A rotation of (headingUpRad - pi/2) then carries
-    // headingUpRad's own vector onto that same "up" spot instead.
-    ctx.translate(width / 2, height / 2);
-    ctx.rotate(headingUpRad - Math.PI / 2);
-    ctx.translate(-width / 2, -height / 2);
-  }
 
   const course: [number, number][] = [[0, 0], ...COURSE_WAYPOINTS];
   const points: [number, number][] = [...course, ...boats.map((b): [number, number] => [b.x, b.y])];

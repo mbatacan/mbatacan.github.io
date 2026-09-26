@@ -50,6 +50,10 @@ import Footer from '../../components/Footer.astro';
           </div>
         </div>
         <canvas id="af-minimap" class="af-minimap" width="120" height="120"></canvas>
+        <div class="af-status-hud">
+          <div id="af-hud-blue" class="af-status-hud-item af-status-hud-item--blue">blue: —</div>
+          <div id="af-hud-red" class="af-status-hud-item af-status-hud-item--red">red: —</div>
+        </div>
         <div id="af-control-hud" class="af-control-hud" hidden>
           <div class="af-control-hud-row">
             <span id="af-control-key-side-0" class="af-control-key">port</span>
@@ -64,8 +68,6 @@ import Footer from '../../components/Footer.astro';
         </div>
       </div>
       <div class="af-hud">
-        <span id="af-hud-blue" class="af-hud-item af-hud-item--blue">blue: —</span>
-        <span id="af-hud-red" class="af-hud-item af-hud-item--red">red: —</span>
         <span id="af-hud-stroke" class="af-hud-item">stroke 0/0</span>
         <button id="af-speed-toggle" class="af-camera-toggle" type="button">1x speed</button>
         <button id="af-camera-toggle" class="af-camera-toggle" type="button">top-down view</button>
@@ -114,7 +116,7 @@ import Footer from '../../components/Footer.astro';
     randomConditions,
     type SideId,
   } from '../../scripts/ama-flow/game';
-  import { decodeAction, headingError, lerpState, type State } from '../../lib/ama-flow/physics';
+  import { decodeAction, lerpState, type State } from '../../lib/ama-flow/physics';
   import { compassRotationDeg } from '../../lib/ama-flow/compass';
   import { drawMinimap } from '../../scripts/ama-flow/minimap';
   import type { AmaFlowScene } from '../../scripts/ama-flow/scene';
@@ -170,11 +172,6 @@ import Footer from '../../components/Footer.astro';
   let clockS = 0;
   let lastTimeMs: number | null = null;
   const control = { side: 0, strokeType: 0 }; // PORT forward, until the player changes it
-
-  // The minimap's heading-up rotation is smoothed rather than following the player's raw heading
-  // 1:1 -- every small steering correction changes psi a little, so an unsmoothed map visibly
-  // swims/spins every stroke instead of only reorienting for the one real turn in the course.
-  let smoothedHeadingRad = 0;
 
   // Watch-only playback speed multiplier -- Play always runs at 1x, so the controls feel
   // consistent regardless of what Watch was last left at.
@@ -239,7 +236,6 @@ import Footer from '../../components/Footer.astro';
     duel = new Duel(randomConditions(seed), seed);
     clockS = 0;
     lastTimeMs = null;
-    smoothedHeadingRad = 0; // matches the initial heading every episode starts at
     resultsEl.hidden = true;
     running = true;
     scene?.setConditions(duel.conditions);
@@ -359,17 +355,13 @@ import Footer from '../../components/Footer.astro';
       const targetHeadingRad = duel.currentTargetHeadingRad(bluePlayerSide());
       compassTargetEl.style.transform = `rotate(${compassRotationDeg(targetHeadingRad, viewUp)}deg)`;
 
-      // Ease toward the player's actual heading rather than snapping to it -- see
-      // smoothedHeadingRad's declaration for why.
-      smoothedHeadingRad += headingError(renderStates.player[2], smoothedHeadingRad) * 0.03;
-      drawMinimap(
-        minimapCanvas,
-        [
-          { x: renderStates.player[0], y: renderStates.player[1], headingRad: renderStates.player[2], color: '#8b8bff' },
-          { x: renderStates.opponent[0], y: renderStates.opponent[1], headingRad: renderStates.opponent[2], color: '#e05a5a' },
-        ],
-        smoothedHeadingRad, // heading-up: the map slowly reorients to keep the player pointing up
-      );
+      // A fixed (world-up) orientation, not heading-up: rotating the map with the player's
+      // heading was tried and reverted -- even smoothed, the constant small steering corrections
+      // made the whole map visibly swim rather than only reorienting for the one real turn.
+      drawMinimap(minimapCanvas, [
+        { x: renderStates.player[0], y: renderStates.player[1], headingRad: renderStates.player[2], color: '#8b8bff' },
+        { x: renderStates.opponent[0], y: renderStates.opponent[1], headingRad: renderStates.opponent[2], color: '#e05a5a' },
+      ]);
 
       const blueLabel = mode === 'watch' ? 'model' : 'you';
       const redLabel = mode === 'watch' ? 'baseline' : 'model';
