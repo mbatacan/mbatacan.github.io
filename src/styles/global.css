@@ -436,17 +436,15 @@ footer {
 
 .af-game {
   display: flex;
-  flex-wrap: wrap;
-  gap: 24px;
-  align-items: flex-start;
+  justify-content: center;
 }
 
 .af-canvas-col {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  flex: 1;
-  min-width: 280px;
+  width: 100%;
+  max-width: 900px;
 }
 
 .af-progress-track {
@@ -711,13 +709,25 @@ footer {
   opacity: 0.8;
 }
 
-.af-controls-col {
-  flex: 0 1 260px;
+.af-model-states {
   display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 0.9rem;
+}
+
+.af-play-directions {
   flex-direction: column;
   gap: 12px;
   line-height: 1.6;
   font-size: 0.9rem;
+}
+
+/* :not([hidden]) rather than a bare `display: flex` -- an explicit `display` in author CSS
+   overrides the UA stylesheet's `[hidden] { display: none }` regardless of specificity (see
+   .af-control-hud, which had the identical bug fixed the same way). */
+.af-play-directions:not([hidden]) {
+  display: flex;
 }
 
 .af-blue {

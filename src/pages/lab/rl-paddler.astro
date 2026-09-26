@@ -76,19 +76,11 @@ import Footer from '../../components/Footer.astro';
           <button id="af-results-close" class="af-button" type="button">close</button>
         </div>
       </div>
-      <div class="af-hud">
+      <div class="af-model-states">
         <span id="af-hud-blue" class="af-hud-item af-hud-item--blue">blue: —</span>
         <span id="af-hud-red" class="af-hud-item af-hud-item--red">red: —</span>
-        <span id="af-hud-stroke" class="af-hud-item">stroke 0/0</span>
-        <button id="af-restart" class="af-camera-toggle" type="button">restart</button>
-        <button id="af-speed-toggle" class="af-camera-toggle" type="button">1x speed</button>
-        <button id="af-camera-toggle" class="af-camera-toggle" type="button">top-down view</button>
       </div>
-      <div id="af-status" class="af-status">loading…</div>
-    </div>
-
-    <div class="af-controls-col">
-      <div id="af-controls-play" class="af-controls-panel" hidden>
+      <div id="af-play-directions" class="af-play-directions" hidden>
         <ul class="af-keys">
           <li><kbd>&larr;</kbd> paddle port</li>
           <li><kbd>&rarr;</kbd> paddle starboard</li>
@@ -97,6 +89,14 @@ import Footer from '../../components/Footer.astro';
         <p class="af-hint">Your current selection fires automatically every stroke -- there's no separate "paddle" key. It's also highlighted at the bottom of the view, so you don't have to look away.</p>
         <p class="af-hint">The green compass arrow points where to steer; wind and current show the same way. The small map in the corner shows the whole course.</p>
       </div>
+      <div class="af-hud">
+        <span id="af-hud-stroke" class="af-hud-item">stroke 0/0</span>
+        <span id="af-hud-time" class="af-hud-item">0.0s</span>
+        <button id="af-restart" class="af-camera-toggle" type="button">restart</button>
+        <button id="af-speed-toggle" class="af-camera-toggle" type="button">1x speed</button>
+        <button id="af-camera-toggle" class="af-camera-toggle" type="button">top-down view</button>
+      </div>
+      <div id="af-status" class="af-status">loading…</div>
     </div>
   </div>
 
@@ -129,9 +129,10 @@ import Footer from '../../components/Footer.astro';
   const hudBlueEl = document.getElementById('af-hud-blue')!;
   const hudRedEl = document.getElementById('af-hud-red')!;
   const hudStrokeEl = document.getElementById('af-hud-stroke')!;
+  const hudTimeEl = document.getElementById('af-hud-time')!;
   const tabWatch = document.getElementById('af-tab-watch')!;
   const tabPlay = document.getElementById('af-tab-play')!;
-  const controlsPlay = document.getElementById('af-controls-play')!;
+  const playDirectionsEl = document.getElementById('af-play-directions')!;
   const legendWatchEl = document.getElementById('af-legend-watch')!;
   const legendPlayEl = document.getElementById('af-legend-play')!;
   const restartBtn = document.getElementById('af-restart')!;
@@ -169,6 +170,11 @@ import Footer from '../../components/Footer.astro';
   let clockS = 0;
   let lastTimeMs: number | null = null;
   const control = { side: 0, strokeType: 0 }; // PORT forward, until the player changes it
+
+  // Wall-clock race timer -- raceStartMs and the timestamps requestAnimationFrame hands frame()
+  // share the same time origin as performance.now(), so they're directly comparable.
+  let raceStartMs = 0;
+  let elapsedRaceS = 0;
 
   // Watch-only playback speed multiplier -- Play always runs at 1x, so the controls feel
   // consistent regardless of what Watch was last left at.
@@ -242,7 +248,7 @@ import Footer from '../../components/Footer.astro';
     // "made good" is sailing jargon for actual progress toward the goal (vs. raw distance
     // traveled, which drifting off course would inflate) -- spelled out here instead.
     resultsBodyEl.textContent =
-      `${winnerName} wins by ${margin}. ` +
+      `${winnerName} wins by ${margin} (race time ${elapsedRaceS.toFixed(1)}s). ` +
       `blue (${blueLabel}): ${blueRms.toFixed(1)} deg avg heading error, ` +
       `${blueVmg.toFixed(0)}/${COURSE_LENGTH_M} m covered, ${blueAvgSpeedKt.toFixed(1)} kt avg speed. ` +
       `red (${redLabel}): ${redRms.toFixed(1)} deg avg heading error, ` +
@@ -255,6 +261,9 @@ import Footer from '../../components/Footer.astro';
     duel = new Duel(randomConditions(seed), seed);
     clockS = 0;
     lastTimeMs = null;
+    raceStartMs = performance.now();
+    elapsedRaceS = 0;
+    hudTimeEl.textContent = '0.0s';
     resultsEl.hidden = true;
     running = true;
     scene?.setConditions(duel.conditions);
@@ -275,7 +284,7 @@ import Footer from '../../components/Footer.astro';
     mode = next;
     tabWatch.setAttribute('aria-selected', String(next === 'watch'));
     tabPlay.setAttribute('aria-selected', String(next === 'play'));
-    controlsPlay.hidden = next !== 'play';
+    playDirectionsEl.hidden = next !== 'play';
     legendWatchEl.hidden = next !== 'watch';
     legendPlayEl.hidden = next !== 'play';
     hudBlueEl.textContent = next === 'watch' ? 'blue (model): —' : 'blue (you): —';
@@ -326,6 +335,7 @@ import Footer from '../../components/Footer.astro';
 
     statusEl.textContent = 'ready';
     running = true;
+    raceStartMs = performance.now(); // the first race, same as restart() does for every one after
 
     function frame(timeMs: number) {
       requestAnimationFrame(frame);
@@ -334,6 +344,8 @@ import Footer from '../../components/Footer.astro';
       lastTimeMs = timeMs;
 
       if (running) {
+        elapsedRaceS = (timeMs - raceStartMs) / 1000;
+        hudTimeEl.textContent = `${elapsedRaceS.toFixed(1)}s`;
         clockS += dtS * SPEED * speedMultiplier;
         while (clockS >= STROKE_DURATION_S) {
           clockS -= STROKE_DURATION_S;
