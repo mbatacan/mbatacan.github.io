@@ -23,6 +23,7 @@ interface BoatVisual {
   paddle: THREE.Group; // the steersman's paddle -- the only crew member the game controls
   crew: CrewFigure[]; // seats 1-5 (bow to just-forward-of-steersman), animated by setCrewStroke
   headingArrow: THREE.ArrowHelper; // scene-level, kept level regardless of hull pitch/roll
+  trackerLine: THREE.Line; // scene-level dashed line to the boat's current course waypoint
 }
 
 // Body-frame x of each seat, stern (steersman, seat 6) to bow (seat 1) -- mirrors the "steersman
@@ -50,6 +51,8 @@ const IAKO_COLOR = 0x8c8c8c;
 const BOAT_LANE_OFFSET_M: Record<BoatId, number> = { player: 5, opponent: -5 };
 const FINISH_LINE_HALF_WIDTH_M = 15;
 const FINISH_BUOY_HEIGHT_M = 3;
+const TURN_BUOY_HEIGHT_M = 3;
+const TRACKER_LINE_HEIGHT_M = 1; // above the water, so the dashed tracker doesn't clip into swell
 const HEADING_ARROW_LENGTH_M = 12;
 const HEADING_ARROW_HEIGHT_M = 1.5; // above the hull, so it clears the swell and reads from above
 const CHASE_BACK_DISTANCE_M = HULL_LENGTH_M * 1.0;
@@ -61,9 +64,11 @@ const FOAM_RADIUS_M = 60; // half-width of the drifting foam patch, recentered u
 const FOAM_COLOR = 0xffffff;
 
 /** A checkered finish gate: two buoy poles and a bright line between them, so the race has a
- * visible endpoint instead of just running out over open, featureless water.
+ * visible endpoint instead of just running out over open, featureless water. Built at the local
+ * origin, facing local +X (the approach direction) -- the caller positions and rotates it to the
+ * course's final waypoint (see AmaFlowScene's constructor).
  */
-function buildFinishLine(distanceM: number): THREE.Group {
+function buildFinishLine(): THREE.Group {
   const group = new THREE.Group();
   const lineGeometry = new THREE.BoxGeometry(0.3, 0.05, FINISH_LINE_HALF_WIDTH_M * 2);
   const lineMaterial = new THREE.MeshStandardMaterial({
@@ -82,7 +87,20 @@ function buildFinishLine(distanceM: number): THREE.Group {
     group.add(buoy);
   }
 
-  group.position.x = distanceM;
+  return group;
+}
+
+/** A single turn buoy marking an intermediate course waypoint, distinct from the two-buoy finish
+ * gate so a player can tell "turn here" from "done."
+ */
+function buildTurnBuoy(): THREE.Group {
+  const group = new THREE.Group();
+  const buoy = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.4, 0.4, TURN_BUOY_HEIGHT_M, 12),
+    new THREE.MeshStandardMaterial({ color: 0xffb703, emissive: 0x442400 }),
+  );
+  buoy.position.y = TURN_BUOY_HEIGHT_M / 2;
+  group.add(buoy);
   return group;
 }
 
@@ -225,7 +243,17 @@ function buildCanoeMesh(hullColor: number): BoatVisual {
     HEADING_ARROW_LENGTH_M * 0.18,
   );
 
-  return { group, paddle: steersman.paddle, crew, headingArrow };
+  // A dashed line to the boat's current course waypoint (see setTrackerTarget). Positions are
+  // placeholders, rewritten every frame; computeLineDistances() must be called again each time
+  // those positions change, or LineDashedMaterial's dash pattern stops updating.
+  const trackerGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
+  const trackerLine = new THREE.Line(
+    trackerGeometry,
+    new THREE.LineDashedMaterial({ color: hullColor, dashSize: 3, gapSize: 2, transparent: true, opacity: 0.6 }),
+  );
+  trackerLine.computeLineDistances();
+
+  return { group, paddle: steersman.paddle, crew, headingArrow, trackerLine };
 }
 
 const OCEAN_VERTEX_SHADER = /* glsl */ `
@@ -313,26 +341,30 @@ export class AmaFlowScene {
   private foam: THREE.Points;
   private foamBaseXZ: Float32Array; // each fleck's fixed local (x, z) offset before drift/wrap
 
-  constructor(canvas: HTMLCanvasElement, conditions: Conditions, finishDistanceM: number) {
+  constructor(canvas: HTMLCanvasElement, conditions: Conditions, waypoints: [number, number][]) {
     this.conditions = conditions;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     // Sky's shader outputs HDR-ish values; without tone mapping it clips straight to white.
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 0.35;
+    this.renderer.toneMappingExposure = 0.45;
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(55, 1, 0.5, 20000);
+    // Blends the ocean into the horizon instead of meeting a flat, washed-out sky edge.
+    this.scene.fog = new THREE.Fog(0x9fd0e8, 150, 900);
 
-    const sun = new THREE.DirectionalLight(0xffffff, 2.0);
-    sun.position.set(50, 80, -30);
-    this.scene.add(sun, new THREE.AmbientLight(0x404060, 1.2));
+    // A low sun (~15-20 deg elevation) reads as a blue sky-with-gradient; the previous ~55 deg
+    // sun lit the whole dome evenly and, combined with tone mapping, clipped toward white.
+    const sun = new THREE.DirectionalLight(0xffffff, 1.3);
+    sun.position.set(60, 25, -80);
+    this.scene.add(sun, new THREE.AmbientLight(0x404060, 0.9));
 
     const sky = new Sky();
     sky.scale.setScalar(4000);
-    sky.material.uniforms.turbidity.value = 1;
-    sky.material.uniforms.rayleigh.value = 2.5;
-    sky.material.uniforms.mieCoefficient.value = 0.003;
+    sky.material.uniforms.turbidity.value = 2;
+    sky.material.uniforms.rayleigh.value = 1.5;
+    sky.material.uniforms.mieCoefficient.value = 0.004;
     sky.material.uniforms.mieDirectionalG.value = 0.8;
     sky.material.uniforms.sunPosition.value.copy(sun.position).normalize();
     this.scene.add(sky);
@@ -371,7 +403,21 @@ export class AmaFlowScene {
     };
     this.scene.add(this.boats.player.group, this.boats.opponent.group);
     this.scene.add(this.boats.player.headingArrow, this.boats.opponent.headingArrow);
-    this.scene.add(buildFinishLine(finishDistanceM));
+    this.scene.add(this.boats.player.trackerLine, this.boats.opponent.trackerLine);
+
+    // A turn buoy at every waypoint except the last, and a two-buoy finish gate at the last,
+    // each oriented to face the approach from the previous waypoint (or the start, for the
+    // first). Sim (x, y) -> three (x, -z), matching setBoatState's threeZ = -y convention; the
+    // bearing maps the same way group.rotation.set(0, psi, 0) does for the boats themselves (see
+    // setBoatState), so no separate sign flip is needed for the rotation.
+    waypoints.forEach(([wx, wy], i) => {
+      const [px, py] = i === 0 ? [0, 0] : waypoints[i - 1];
+      const bearingRad = Math.atan2(wy - py, wx - px);
+      const marker = i === waypoints.length - 1 ? buildFinishLine() : buildTurnBuoy();
+      marker.position.set(wx, 0, -wy);
+      marker.rotation.y = bearingRad;
+      this.scene.add(marker);
+    });
 
     // A patch of surface flecks that drift with the current, recentered under the camera each
     // frame (like the ocean mesh) so the current -- otherwise invisible against open water -- is
@@ -416,6 +462,32 @@ export class AmaFlowScene {
     arrow.position.set(threeX, height + HEADING_ARROW_HEIGHT_M, threeZ);
     arrow.setDirection(new THREE.Vector3(Math.cos(psi), 0, -Math.sin(psi))); // sim +y/port -> world -z
     this.lastPsi[which] = psi;
+  }
+
+  /** Point that boat's dashed tracker line at its current course waypoint, given in ama-flow's
+   * sim frame -- called once per frame after setBoatState, since the line runs from the boat's
+   * current (rendered) position to the target.
+   */
+  setTrackerTarget(which: BoatId, waypointX: number, waypointY: number): void {
+    const boatPosition = this.boats[which].group.position;
+    const line = this.boats[which].trackerLine;
+    const positions = line.geometry.attributes.position as THREE.BufferAttribute;
+    positions.setXYZ(0, boatPosition.x, boatPosition.y + TRACKER_LINE_HEIGHT_M, boatPosition.z);
+    positions.setXYZ(1, waypointX, boatPosition.y + TRACKER_LINE_HEIGHT_M, -waypointY);
+    positions.needsUpdate = true;
+    line.computeLineDistances(); // required every time positions change, or dashes freeze
+  }
+
+  /** Update wind/current for a new race (conditions are randomized per race -- see game.ts's
+   * randomConditions). Only the swell direction depends on wind direction; amplitude, wavenumber
+   * and speed don't, so only the three direction uniforms need updating.
+   */
+  setConditions(conditions: Conditions): void {
+    this.conditions = conditions;
+    this.waves = defaultSwell(conditions.wind_direction_rad);
+    this.oceanMaterial.uniforms.uDirection0.value.set(...this.waves[0].direction);
+    this.oceanMaterial.uniforms.uDirection1.value.set(...this.waves[1].direction);
+    this.oceanMaterial.uniforms.uDirection2.value.set(...this.waves[2].direction);
   }
 
   /** The sim-frame heading (ama-flow's CCW-from-+x convention) that currently points "up" on

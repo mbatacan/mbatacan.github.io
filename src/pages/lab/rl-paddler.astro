@@ -88,9 +88,18 @@ import Footer from '../../components/Footer.astro';
 </BaseLayout>
 
 <script>
-  import { Duel, EPISODE_STROKES, FINISH_DISTANCE_M, policies, type SideId } from '../../scripts/ama-flow/game';
+  import {
+    COURSE_LENGTH_M,
+    COURSE_WAYPOINTS,
+    Duel,
+    EPISODE_STROKES,
+    policies,
+    randomConditions,
+    type SideId,
+  } from '../../scripts/ama-flow/game';
   import { decodeAction, lerpState } from '../../lib/ama-flow/physics';
   import { compassRotationDeg } from '../../lib/ama-flow/compass';
+  import type { AmaFlowScene } from '../../scripts/ama-flow/scene';
 
   const SIDE_NAMES = ['port', 'starboard'];
   const STROKE_TYPE_NAMES = ['forward', 'draw', 'poke', 'rudder'];
@@ -128,7 +137,8 @@ import Footer from '../../components/Footer.astro';
   const SPEED = STROKE_DURATION_S / STROKE_PERIOD_S; // sim-seconds per real second
 
   let mode: Mode = 'watch';
-  let duel = new Duel();
+  let duel = new Duel(randomConditions(Math.floor(Math.random() * 1_000_000)));
+  let scene: AmaFlowScene | null = null; // set once the dynamic import below resolves
   let running = false;
   let clockS = 0;
   let lastTimeMs: number | null = null;
@@ -183,11 +193,15 @@ import Footer from '../../components/Footer.astro';
   }
 
   function restart(): void {
-    duel = new Duel(duel.conditions, Math.floor(Math.random() * 1_000_000));
+    const seed = Math.floor(Math.random() * 1_000_000);
+    duel = new Duel(randomConditions(seed), seed);
     clockS = 0;
     lastTimeMs = null;
     resultsEl.hidden = true;
     running = true;
+    scene?.setConditions(duel.conditions);
+    compassWindLabelEl.textContent = `wind ${(duel.conditions.wind_speed_mps * MPS_TO_KT).toFixed(0)} kt`;
+    compassCurrentLabelEl.textContent = `current ${(duel.conditions.current_speed_mps * MPS_TO_KT).toFixed(1)} kt`;
   }
 
   function setMode(next: Mode): void {
@@ -218,8 +232,11 @@ import Footer from '../../components/Footer.astro';
   });
 
   import('../../scripts/ama-flow/scene').then(({ AmaFlowScene }) => {
-    const scene = new AmaFlowScene(canvas, duel.conditions, FINISH_DISTANCE_M);
-    const resizeObserver = new ResizeObserver(() => scene.resize());
+    // A non-null local alias: `scene` (the module-level binding restart() reads) is nullable
+    // only until this promise resolves, but TS can't see that across the closure.
+    const activeScene = new AmaFlowScene(canvas, duel.conditions, COURSE_WAYPOINTS);
+    scene = activeScene;
+    const resizeObserver = new ResizeObserver(() => activeScene.resize());
     resizeObserver.observe(canvas);
 
     // Conditions are fixed for the episode, so the compass labels are set once; only each
@@ -230,7 +247,7 @@ import Footer from '../../components/Footer.astro';
     let cameraMode: 'chase' | 'top' = 'chase';
     cameraToggleBtn.addEventListener('click', () => {
       cameraMode = cameraMode === 'chase' ? 'top' : 'chase';
-      scene.setCameraMode(cameraMode);
+      activeScene.setCameraMode(cameraMode);
       cameraToggleBtn.textContent = cameraMode === 'chase' ? 'top-down view' : 'chase view';
     });
 
@@ -262,18 +279,21 @@ import Footer from '../../components/Footer.astro';
         const a = states[Math.max(i, 0)];
         const b = states[Math.min(i + 1, states.length - 1)];
         const state = duel.isDone(side) ? states[states.length - 1] : lerpState(a, b, t);
-        scene.setBoatState(side, state[0], state[1], state[2], elapsed);
+        activeScene.setBoatState(side, state[0], state[1], state[2], elapsed);
+
+        const waypoint = duel.currentWaypoint(side);
+        activeScene.setTrackerTarget(side, waypoint[0], waypoint[1]);
 
         const lastAction = duel.history(side).actions.at(-1);
         if (lastAction !== undefined) {
           const { side: paddleSide, strokeType } = decodeAction(lastAction);
-          scene.setStroke(side, paddleSide, strokeType, duel.isDone(side) ? 0 : t);
+          activeScene.setStroke(side, paddleSide, strokeType, duel.isDone(side) ? 0 : t);
         }
-        scene.setCrewStroke(side, duel.history(side).actions.length, duel.isDone(side) ? 0 : t);
+        activeScene.setCrewStroke(side, duel.history(side).actions.length, duel.isDone(side) ? 0 : t);
       }
-      scene.render(elapsed, bluePlayerSide());
+      activeScene.render(elapsed, bluePlayerSide());
 
-      const viewUp = scene.viewUpAngleRad(bluePlayerSide());
+      const viewUp = activeScene.viewUpAngleRad(bluePlayerSide());
       compassWindEl.style.transform = `rotate(${compassRotationDeg(duel.conditions.wind_direction_rad, viewUp)}deg)`;
       compassCurrentEl.style.transform = `rotate(${compassRotationDeg(duel.conditions.current_direction_rad, viewUp)}deg)`;
 
@@ -292,7 +312,7 @@ import Footer from '../../components/Footer.astro';
       hudRedEl.textContent = `red (${redLabel}): ${redErr.toFixed(1)} deg${strokeText(redAction)}`;
 
       const progressPct = (side: SideId) =>
-        `${Math.max(0, Math.min(1, duel.distanceMadeGoodM(side) / FINISH_DISTANCE_M)) * 100}%`;
+        `${Math.max(0, Math.min(1, duel.distanceMadeGoodM(side) / COURSE_LENGTH_M)) * 100}%`;
       progressBlueEl.style.left = progressPct('player');
       progressRedEl.style.left = progressPct('opponent');
     }

@@ -231,16 +231,22 @@ export function advanceStroke(
   return s;
 }
 
-/** Build the observation vector for a state, matching envs/canoe_env.py:build_observation. */
+/** Build the observation vector for a state, matching envs/canoe_env.py:build_observation.
+ * `targetHeadingRad` defaults to 0 (ama-flow's fixed TARGET_HEADING) but can be any bearing --
+ * every other observation is either heading-relative or body-frame, so holding heading toward a
+ * rotated target is the same task the model trained on, just rotated (see game.ts's Duel, which
+ * uses this for a multi-leg course).
+ */
 export function buildObservation(
   state: State,
   conditions: Conditions,
   crew: CrewConfig,
   strokeIndex: number,
   lastAction: number | null,
+  targetHeadingRad = 0.0,
 ): Float64Array {
   const obs = new Float64Array(PRESETS.obs_size);
-  const error = headingError(state[2], 0.0);
+  const error = headingError(state[2], targetHeadingRad);
   obs[ObsIndex.SIN_HEADING_ERROR] = Math.sin(error);
   obs[ObsIndex.COS_HEADING_ERROR] = Math.cos(error);
   obs[ObsIndex.YAW_RATE] = state[5];
