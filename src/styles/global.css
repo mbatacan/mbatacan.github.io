@@ -525,10 +525,60 @@ footer {
   color: #59d6ff;
 }
 
+.af-compass-arrow--target {
+  color: #4ade80;
+}
+
 .af-compass-label {
   font-size: 0.75rem;
   color: white;
   white-space: nowrap;
+}
+
+.af-minimap {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 6px;
+}
+
+.af-control-hud {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+}
+
+/* :not([hidden]) rather than a bare `display: flex` above -- an explicit `display` in author
+   CSS overrides the UA stylesheet's `[hidden] { display: none }` regardless of specificity, so
+   the un-toggled rule would show this even while the `hidden` attribute is set. */
+.af-control-hud:not([hidden]) {
+  display: flex;
+}
+
+.af-control-hud-row {
+  display: flex;
+  gap: 6px;
+}
+
+.af-control-key {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.45);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.af-control-key--active {
+  background: #8b8bff;
+  border-color: #8b8bff;
+  color: #04101c;
+  font-weight: 700;
 }
 
 .af-hud {
