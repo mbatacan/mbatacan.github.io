@@ -18,6 +18,9 @@ export interface PolicyMeta {
   note: string;
   run_id: string;
   step: number;
+  /** Unity Catalog registry version this checkpoint was exported from; absent for checkpoints
+   * that aren't registered (the registry holds a run's latest checkpoint only). */
+  registry?: { model: string; version: string; export_id: string };
   params: Record<string, string>; // the MLflow run's params, all strings
   eval_grid: { columns: string[]; data: (number | boolean)[][] };
   curve: Record<string, [number, number][]>; // metric -> [step, value], up to `step`

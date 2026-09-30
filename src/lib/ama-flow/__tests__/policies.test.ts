@@ -17,6 +17,11 @@ describe('published policy entries', () => {
       expect(meta.step).toBeGreaterThan(0);
       expect(Object.keys(meta.params).length).toBeGreaterThan(0);
       expect(meta.params.seed).toBeDefined();
+      if (meta.registry) {
+        expect(meta.registry.model).toBeTruthy();
+        expect(typeof meta.registry.version).toBe('string');
+        expect(meta.registry.export_id).toBeTruthy();
+      }
       expect(meta.eval_grid.data).toHaveLength(9);
       expect(meta.eval_grid.data[0]).toHaveLength(meta.eval_grid.columns.length);
       expect(Object.keys(meta.curve).length).toBeGreaterThan(0);

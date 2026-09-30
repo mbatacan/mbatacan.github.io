@@ -90,13 +90,13 @@ The blog index auto-updates — no manual link list needed. The URL becomes `/bl
 
 ## Adding/updating a model on /lab/rl-paddler
 
-The picker and info panel are generated from `src/data/ama-flow/policies/` -- don't hand-edit those files. In the **ama-flow** repo, edit `configs/web_models.yaml` (one entry per hand-picked run + checkpoint step, with a label and one-line note), then re-export into this repo:
+The picker and info panel are generated from `src/data/ama-flow/policies/` -- don't hand-edit those files. In the **ama-flow** repo, edit `configs/web_models.yaml`: each entry has an `id`, `label` and `note`, and names its model either by `export_id` (a version of the Unity Catalog model `workspace.ama_flow.steersman` tagged with that `export_id`, which resolves to that version's run and latest checkpoint) or by an explicit `run_id` + `step` for a checkpoint that isn't registered. Then re-export into this repo (Databricks auth via `databricks auth login`):
 
 ```bash
-uv run python -m ama_flow.export.web --manifest configs/web_models.yaml --out ../mbatacan.github.io/src/data/ama-flow
+AMA_FLOW_TRACKING=databricks uv run python -m ama_flow.export.web --manifest configs/web_models.yaml --out ../mbatacan.github.io/src/data/ama-flow
 ```
 
-Commit the regenerated `presets.json`, `parity.json` and `policies/`, then run `npm test` -- every entry's weights are checked against its own Python obs->action pairs. The export recomputes each checkpoint's eval grid (slow, a few minutes per entry) because MLflow only stores one for a run's final model. Every entry must have been trained on the physics in `presets.json`.
+Commit the regenerated `presets.json`, `parity.json` and `policies/` (delete any `policies/<id>.json` no longer in the manifest -- the exporter doesn't remove them), then run `npm test` -- every entry's weights are checked against its own Python obs->action pairs. The export recomputes each checkpoint's eval grid (slow, a few minutes) because MLflow only stores one for a run's final model. Every entry must have been trained on the physics in `presets.json`.
 
 ## Adding a page
 
