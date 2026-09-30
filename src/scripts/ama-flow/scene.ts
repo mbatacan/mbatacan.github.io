@@ -3,6 +3,9 @@
 // never runs during Astro's static build. Waves are cosmetic (see ../../lib/ama-flow/waves.ts);
 // nothing here feeds back into the physics.
 import * as THREE from 'three';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
+import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
+import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import { canoeOutlines, HULL_LENGTH_M } from '../../lib/ama-flow/canoe-geometry';
 import { FINISH_GATE_HALF_WIDTH_M } from './game';
@@ -25,7 +28,7 @@ interface BoatVisual {
   steersman: CrewFigure; // the only crew member the game controls (seat 6, stern)
   crew: CrewFigure[]; // seats 1-5 (bow to just-forward-of-steersman), animated by setCrewStroke
   headingArrow: THREE.ArrowHelper; // scene-level, kept level regardless of hull pitch/roll
-  trackerLine: THREE.Line; // scene-level dashed line to the boat's current course waypoint
+  tracker: TrackerLine; // scene-level dashed line to the boat's current course waypoint
 }
 
 // Body-frame x of each seat, stern (steersman, seat 6) to bow (seat 1) -- mirrors the "steersman
@@ -58,6 +61,14 @@ const FINISH_LINE_HALF_WIDTH_M = FINISH_GATE_HALF_WIDTH_M;
 const FINISH_BUOY_HEIGHT_M = 3;
 const TURN_BUOY_HEIGHT_M = 3;
 const TRACKER_LINE_HEIGHT_M = 1; // above the water, so the dashed tracker doesn't clip into swell
+const TRACKER_DASH_M = 3;
+const TRACKER_GAP_M = 2;
+const MAX_TRACKER_DASHES = 120; // 120 * 5 m = 600 m, well past any leg of the course
+const TRACKER_WIDTH_PX = 4;
+const TRACKER_OUTLINE_WIDTH_PX = 8;
+const TRACKER_OUTLINE_COLOR = 0x0b1030; // dark, so the line reads against both light and dark water
+// Lighter than the hull colors: the line sits on teal water, where the hull blue/red are dim.
+const TRACKER_COLORS: Record<BoatId, number> = { player: 0xb8b8ff, opponent: 0xff8a8a };
 const HEADING_ARROW_LENGTH_M = 12;
 const HEADING_ARROW_HEIGHT_M = 1.5; // above the hull, so it clears the swell and reads from above
 const CHASE_BACK_DISTANCE_M = HULL_LENGTH_M * 1.0;
@@ -255,12 +266,79 @@ function buildPaddleMesh(color: number): THREE.Group {
   return paddle;
 }
 
+/** The [start, end] distances along a line of `length` metres for each dash, starting with a
+ * dash at 0. The last dash is cut short at the end of the line, and at most `maxDashes` are
+ * returned.
+ */
+export function dashSpans(
+  length: number,
+  dashM: number,
+  gapM: number,
+  maxDashes: number,
+): [number, number][] {
+  const spans: [number, number][] = [];
+  for (let start = 0; start < length && spans.length < maxDashes; start += dashM + gapM) {
+    spans.push([start, Math.min(start + dashM, length)]);
+  }
+  return spans;
+}
+
+/** A dashed line from a boat to its current waypoint, thick enough to read from the chase camera.
+ * WebGL lines are always one pixel wide, so this uses three's screen-space LineSegments2 with each
+ * dash as its own segment, rewritten in place every frame (no allocation). A wider, dark copy under
+ * the colored one outlines it, so it stands out on any water color.
+ */
+class TrackerLine {
+  readonly objects: LineSegments2[];
+  private readonly positions = new Float32Array(MAX_TRACKER_DASHES * 6);
+  private readonly geometry = new LineSegmentsGeometry();
+  private readonly materials: LineMaterial[];
+  private readonly direction = new THREE.Vector3();
+
+  constructor(color: number) {
+    this.geometry.setPositions(this.positions); // uses the array as-is, so set() can write into it
+    this.materials = [
+      new LineMaterial({ color: TRACKER_OUTLINE_COLOR, linewidth: TRACKER_OUTLINE_WIDTH_PX, toneMapped: false }),
+      new LineMaterial({ color, linewidth: TRACKER_WIDTH_PX, toneMapped: false }),
+    ];
+    this.objects = this.materials.map((material, i) => {
+      const line = new LineSegments2(this.geometry, material);
+      line.frustumCulled = false; // the bounds were computed from the empty initial positions
+      line.renderOrder = i + 1; // outline first, colored line on top
+      return line;
+    });
+  }
+
+  /** Lay the dashes along the line from `start` to `end`. */
+  set(start: THREE.Vector3, end: THREE.Vector3): void {
+    const length = start.distanceTo(end);
+    this.direction.subVectors(end, start).normalize();
+    const spans = dashSpans(length, TRACKER_DASH_M, TRACKER_GAP_M, MAX_TRACKER_DASHES);
+    spans.forEach(([from, to], i) => {
+      const o = i * 6;
+      this.positions[o] = start.x + this.direction.x * from;
+      this.positions[o + 1] = start.y + this.direction.y * from;
+      this.positions[o + 2] = start.z + this.direction.z * from;
+      this.positions[o + 3] = start.x + this.direction.x * to;
+      this.positions[o + 4] = start.y + this.direction.y * to;
+      this.positions[o + 5] = start.z + this.direction.z * to;
+    });
+    (this.geometry.attributes.instanceStart as THREE.InterleavedBufferAttribute).data.needsUpdate = true;
+    this.geometry.instanceCount = spans.length;
+  }
+
+  /** Line widths are in pixels, so the materials need the canvas size. */
+  setResolution(width: number, height: number): void {
+    this.materials.forEach((material) => material.resolution.set(width, height));
+  }
+}
+
 /** A low-poly OC6 glyph: hull, ama, two iako, six paddlers, and the steersman's paddle, laid on
  * the water plane. Body-frame +x is forward; the mesh is built in the X-Z plane (Y up) so a
  * Y-axis rotation by heading psi orients it exactly as ama_flow's own top-down glyph would (sim
  * +y/port -> -Z). The ama is rigged to port, as on a real OC6.
  */
-function buildCanoeMesh(hullColor: number): BoatVisual {
+function buildCanoeMesh(hullColor: number, trackerColor: number): BoatVisual {
   const outlines = canoeOutlines();
   const group = new THREE.Group();
 
@@ -306,17 +384,10 @@ function buildCanoeMesh(hullColor: number): BoatVisual {
     HEADING_ARROW_LENGTH_M * 0.18,
   );
 
-  // A dashed line to the boat's current course waypoint (see setTrackerTarget). Positions are
-  // placeholders, rewritten every frame; computeLineDistances() must be called again each time
-  // those positions change, or LineDashedMaterial's dash pattern stops updating.
-  const trackerGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
-  const trackerLine = new THREE.Line(
-    trackerGeometry,
-    new THREE.LineDashedMaterial({ color: hullColor, dashSize: 3, gapSize: 2, transparent: true, opacity: 0.6 }),
-  );
-  trackerLine.computeLineDistances();
+  // A dashed line to the boat's current course waypoint, rewritten every frame (see setTrackerTarget).
+  const tracker = new TrackerLine(trackerColor);
 
-  return { group, steersman, crew, headingArrow, trackerLine };
+  return { group, steersman, crew, headingArrow, tracker };
 }
 
 const OCEAN_VERTEX_SHADER = /* glsl */ `
@@ -397,6 +468,8 @@ export class AmaFlowScene {
   private waves: WaveComponent[];
   private conditions: Conditions;
   private boats: Record<BoatId, BoatVisual>;
+  private trackerStart = new THREE.Vector3(); // scratch vectors for setTrackerTarget
+  private trackerEnd = new THREE.Vector3();
   private lastPsi: Record<BoatId, number> = { player: 0, opponent: 0 };
   private cameraMode: CameraMode = 'chase';
   private cameraTarget = new THREE.Vector3();
@@ -461,12 +534,12 @@ export class AmaFlowScene {
     this.scene.add(this.ocean);
 
     this.boats = {
-      player: buildCanoeMesh(HULL_COLORS.player),
-      opponent: buildCanoeMesh(HULL_COLORS.opponent),
+      player: buildCanoeMesh(HULL_COLORS.player, TRACKER_COLORS.player),
+      opponent: buildCanoeMesh(HULL_COLORS.opponent, TRACKER_COLORS.opponent),
     };
     this.scene.add(this.boats.player.group, this.boats.opponent.group);
     this.scene.add(this.boats.player.headingArrow, this.boats.opponent.headingArrow);
-    this.scene.add(this.boats.player.trackerLine, this.boats.opponent.trackerLine);
+    this.scene.add(...this.boats.player.tracker.objects, ...this.boats.opponent.tracker.objects);
 
     // A turn buoy at every waypoint except the last, and a two-buoy finish gate at the last,
     // each oriented to face the approach from the previous waypoint (or the start, for the
@@ -533,12 +606,10 @@ export class AmaFlowScene {
    */
   setTrackerTarget(which: BoatId, waypointX: number, waypointY: number): void {
     const boatPosition = this.boats[which].group.position;
-    const line = this.boats[which].trackerLine;
-    const positions = line.geometry.attributes.position as THREE.BufferAttribute;
-    positions.setXYZ(0, boatPosition.x, boatPosition.y + TRACKER_LINE_HEIGHT_M, boatPosition.z);
-    positions.setXYZ(1, waypointX, boatPosition.y + TRACKER_LINE_HEIGHT_M, -waypointY);
-    positions.needsUpdate = true;
-    line.computeLineDistances(); // required every time positions change, or dashes freeze
+    const y = boatPosition.y + TRACKER_LINE_HEIGHT_M;
+    this.trackerStart.set(boatPosition.x, y, boatPosition.z);
+    this.trackerEnd.set(waypointX, y, -waypointY);
+    this.boats[which].tracker.set(this.trackerStart, this.trackerEnd);
   }
 
   /** Update wind/current for a new race (conditions are randomized per race -- see game.ts's
@@ -683,6 +754,8 @@ export class AmaFlowScene {
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
+    this.boats.player.tracker.setResolution(width, height);
+    this.boats.opponent.tracker.setResolution(width, height);
   }
 
   dispose(): void {

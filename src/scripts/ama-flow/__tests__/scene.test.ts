@@ -2,7 +2,7 @@
 // verified visually (see the PR description).
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { BLADE_CENTER_OFFSET_M, forwardStrokePose, paddlePose } from '../scene';
+import { BLADE_CENTER_OFFSET_M, dashSpans, forwardStrokePose, paddlePose } from '../scene';
 
 describe('forwardStrokePose', () => {
   it('keeps the blade in the water through the drive', () => {
@@ -84,5 +84,20 @@ describe('paddlePose', () => {
     const handX = (pose: ReturnType<typeof paddlePose>) =>
       new THREE.Vector3(0, 0.7, 0).applyEuler(pose.rotation).add(pose.position).x;
     expect(handX(catchPose)).toBeGreaterThan(handX(exitPose));
+  });
+});
+
+describe('dashSpans', () => {
+  it('starts with a dash at 0 and steps by dash + gap', () => {
+    expect(dashSpans(20, 3, 2, 100)).toEqual([[0, 3], [5, 8], [10, 13], [15, 18]]);
+  });
+
+  it('cuts the last dash short at the end of the line', () => {
+    expect(dashSpans(12, 3, 2, 100)).toEqual([[0, 3], [5, 8], [10, 12]]);
+  });
+
+  it('returns nothing for an empty line, and respects the dash cap', () => {
+    expect(dashSpans(0, 3, 2, 100)).toEqual([]);
+    expect(dashSpans(1000, 3, 2, 4)).toHaveLength(4);
   });
 });
