@@ -10,7 +10,7 @@ import {
   type Conditions,
   type State,
 } from '../../lib/ama-flow/physics';
-import { baselineAction, policyAction } from '../../lib/ama-flow/policy';
+import { baselineAction, DEFAULT_POLICY_ID, policyAction } from '../../lib/ama-flow/policy';
 import { PRESETS } from '../../lib/ama-flow/presets';
 import { mulberry32 } from '../../lib/ama-flow/rng';
 
@@ -130,6 +130,43 @@ function alongLegM(legIndex: number, position: [number, number]): number {
   const projectionM = (positionVector[0] * legVector[0] + positionVector[1] * legVector[1]) / length;
   return Math.max(0, Math.min(projectionM, length));
 }
+
+/** Perpendicular (signed) distance from a position to the leg's fixed bearing line -- how far
+ * off the rhumb line the boat is, independent of how far along it the boat has progressed.
+ * alongLegM alone lets a boat that cuts inside a turn (or passes wide of the finish gate) still
+ * register as having reached the waypoint, since crossing the perpendicular line at the leg's end
+ * doesn't require being anywhere near the mark itself -- see the gating in step().
+ */
+function crossTrackM(legIndex: number, position: [number, number]): number {
+  const start = legStart(legIndex);
+  const end = COURSE_WAYPOINTS[legIndex];
+  const legVector = [end[0] - start[0], end[1] - start[1]];
+  const length = legLengthM(legIndex);
+  const positionVector = [position[0] - start[0], position[1] - start[1]];
+  return (positionVector[0] * legVector[1] - positionVector[1] * legVector[0]) / length;
+}
+
+// How close to a turn buoy's actual position a boat must be (measured perpendicular to the
+// rhumb line, at the moment it reaches the leg's forward extent) to count as having rounded it.
+// Neither the trained model nor the scripted baseline corrects for cross-track drift -- both only
+// hold a heading, so cross-wind/current leeway pushes them steadily off the rhumb line with
+// nothing to pull them back. Measured empirically (60 random-seed episodes per policy, logging
+// cross-track distance at the moment each leg's forward-progress threshold is first reached):
+//   leg 0 (the turn buoy):  p50 ~11-17m, p80 ~21-28m, p90 ~30m
+//   leg 1 (the finish):     p50 ~32m,    p80 ~49-51m, p90 ~52-55m (then a long tail past 100m --
+//                           unlucky wind/current seeds that drift wildly and shouldn't count as a
+//                           real finish)
+// A radius near either leg's own p50 fails about half the time (confirmed: a first attempt at 15m
+// stalled most races at the first buoy, tied on distance and decided by the RMS-error tiebreak --
+// this is what made the baseline look like it had started winning far more often after the gate
+// went in, rather than any change in the model's actual performance). These are set past each
+// leg's p90 instead, generous enough that most races complete while still ruling out the extreme
+// drift tail and the original bug (crossing the rhumb line's infinite extension while nowhere near
+// the mark). The finish gate is wider than the turn buoy because it naturally accumulates more
+// drift (it's the leg after the turn, and longer) -- see scene.ts's buildFinishLine, which sizes
+// the visible two-buoy gate to this same constant so what's drawn matches what's enforced.
+export const TURN_ROUNDING_RADIUS_M = 30;
+export const FINISH_GATE_HALF_WIDTH_M = 55;
 
 export interface BoatHistory {
   states: State[]; // n+1 entries: the initial state, then one per completed stroke
@@ -254,9 +291,19 @@ export class Duel {
 
     // Advance once the boat has covered the current leg's full length along its fixed bearing --
     // not proximity to the waypoint's exact (x, y), which is unstable near/past the point (see
-    // LEG_BEARINGS_RAD's comment).
-    if (alongLegM(h.waypointIndex, [nextState[0], nextState[1]]) >= legLengthM(h.waypointIndex)) {
-      if (h.waypointIndex === COURSE_WAYPOINTS.length - 1) {
+    // LEG_BEARINGS_RAD's comment) -- AND is within the mark's rounding tolerance (the finish
+    // gate's, if this is the last waypoint) of that fixed bearing line. Forward progress alone
+    // isn't enough: it's satisfied by crossing the line extended infinitely to either side, which
+    // let a boat cut inside a turn buoy, or cross the finish well outside the two visible finish
+    // buoys, and still register as having reached the mark.
+    const isFinalLeg = h.waypointIndex === COURSE_WAYPOINTS.length - 1;
+    const toleranceM = isFinalLeg ? FINISH_GATE_HALF_WIDTH_M : TURN_ROUNDING_RADIUS_M;
+    const reachedForward =
+      alongLegM(h.waypointIndex, [nextState[0], nextState[1]]) >= legLengthM(h.waypointIndex);
+    const withinTolerance =
+      Math.abs(crossTrackM(h.waypointIndex, [nextState[0], nextState[1]])) <= toleranceM;
+    if (reachedForward && withinTolerance) {
+      if (isFinalLeg) {
         h.finished = true;
       } else {
         h.waypointIndex += 1;
@@ -288,7 +335,14 @@ export class Duel {
   }
 }
 
+let selectedPolicyId = DEFAULT_POLICY_ID;
+
+/** Choose which published checkpoint `policies.model` runs; policyAction throws on unknown ids. */
+export function setSelectedPolicy(id: string): void {
+  selectedPolicyId = id;
+}
+
 export const policies: Record<'model' | 'baseline', Policy> = {
-  model: policyAction,
+  model: (obs) => policyAction(obs, selectedPolicyId),
   baseline: baselineAction,
 };

@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import { canoeOutlines, HULL_LENGTH_M } from '../../lib/ama-flow/canoe-geometry';
+import { FINISH_GATE_HALF_WIDTH_M } from './game';
 import { PRESETS } from '../../lib/ama-flow/presets';
 import { currentVelocity, seatSide, type Conditions } from '../../lib/ama-flow/physics';
 import { defaultSwell, waveHeight, waveSlope, type WaveComponent } from '../../lib/ama-flow/waves';
@@ -49,7 +50,9 @@ const IAKO_COLOR = 0x8c8c8c;
 // Both boats run identical physics from (0, 0), so without this they'd render exactly on top of
 // each other. This offset is visual only -- applied to the mesh, never to the simulated state.
 const BOAT_LANE_OFFSET_M: Record<BoatId, number> = { player: 5, opponent: -5 };
-const FINISH_LINE_HALF_WIDTH_M = 15;
+// Matches game.ts's FINISH_GATE_HALF_WIDTH_M, the actual rounding tolerance -- so the visible
+// gate is exactly as wide as what the physics enforces, not just a decoration.
+const FINISH_LINE_HALF_WIDTH_M = FINISH_GATE_HALF_WIDTH_M;
 const FINISH_BUOY_HEIGHT_M = 3;
 const TURN_BUOY_HEIGHT_M = 3;
 const TRACKER_LINE_HEIGHT_M = 1; // above the water, so the dashed tracker doesn't clip into swell
