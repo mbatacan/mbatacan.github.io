@@ -17,11 +17,12 @@ interface CrewFigure {
   group: THREE.Group;
   paddle: THREE.Group;
   torso: THREE.Mesh;
+  head: THREE.Mesh;
 }
 
 interface BoatVisual {
   group: THREE.Group;
-  paddle: THREE.Group; // the steersman's paddle -- the only crew member the game controls
+  steersman: CrewFigure; // the only crew member the game controls (seat 6, stern)
   crew: CrewFigure[]; // seats 1-5 (bow to just-forward-of-steersman), animated by setCrewStroke
   headingArrow: THREE.ArrowHelper; // scene-level, kept level regardless of hull pitch/roll
   trackerLine: THREE.Line; // scene-level dashed line to the boat's current course waypoint
@@ -114,51 +115,101 @@ function shapeFromOutline(points: [number, number][]): THREE.Shape {
   return shape;
 }
 
+/** Share of a forward-stroke cycle spent pulling (the drive); the rest is recovery. Real paddle
+ * strokes spend well under half the cycle pulling -- most of it is the blade swinging back out
+ * front, which is what makes the reach read as a reach.
+ */
+const DRIVE_FRACTION = 0.4;
+
 /** A basic OC6 stroke, forward/draw/poke/rudder in the physics but rendered the same way for
  * every crew seat (only the steersman's actual stroke type is known -- seats 1-5 are always
  * assumed to paddle forward). Real outrigger crews paddle around 50 strokes per minute; the
- * page drives `phase` at that rate (see rl-paddler.astro's STROKE_PERIOD_S).
+ * page drives `phase` at that rate (see STROKE_PERIOD_S in page.ts).
  *
  * Returns `sweep` (-1 at the catch, forward in the water, to +1 at the exit, aft) and `lift`
- * (0 = blade buried, 1 = fully clear of the water during recovery), both continuous across the
- * phase 1 -> 0 wrap so consecutive strokes blend smoothly.
+ * (0 = blade buried, 1 = fully clear of the water during recovery). Both are continuous across
+ * the phase 1 -> 0 wrap, and sweep eases in and out of each extreme so the blade doesn't snap
+ * between the drive and the recovery.
  */
 export function forwardStrokePose(phase: number): { sweep: number; lift: number } {
   const p = ((phase % 1) + 1) % 1;
-  if (p < 0.55) {
-    // Drive: blade planted, sweeping from the catch (forward) to the exit (aft).
-    const t = p / 0.55;
-    return { sweep: -1 + 2 * t, lift: 0 };
+  if (p < DRIVE_FRACTION) {
+    // Drive: blade planted, pulled from the catch (forward) to the exit (aft).
+    const t = p / DRIVE_FRACTION;
+    return { sweep: -Math.cos(Math.PI * t), lift: 0 };
   }
-  // Recovery: blade lifts clear, swings forward, and re-enters just as phase wraps to 0.
-  const t = (p - 0.55) / 0.45;
-  const lift = Math.sin(t * Math.PI); // 0 at exit and catch, peak mid-recovery
-  return { sweep: 1 - 2 * t, lift };
+  // Recovery: blade lifts clear and swings forward, re-entering at the catch as phase wraps to 0.
+  const t = (p - DRIVE_FRACTION) / (1 - DRIVE_FRACTION);
+  return { sweep: Math.cos(Math.PI * t), lift: Math.sin(Math.PI * t) };
 }
 
-/** Poses a paddle (and optionally its figure's torso) from a stroke's side and its
- * forwardStrokePose()-shaped sweep/lift, shared by every crew seat and the steersman's forward
- * stroke. `side` is 0 (port) or 1 (starboard); port swings the blade to local -Z, matching the
- * ama's port rigging.
+// Paddler geometry, in a figure's own frame: origin at the hip/seat, +x forward, +y up, -z port.
+const SHAFT_HALF_LENGTH_M = 0.7; // buildPaddleMesh's shaft is 1.4 m, centered on the paddle group
+export const BLADE_CENTER_OFFSET_M = -0.9; // blade center below the paddle group's origin
+const TOP_HAND_TO_BLADE_M = SHAFT_HALF_LENGTH_M - BLADE_CENTER_OFFSET_M;
+const TORSO_CENTER_M = 0.35; // torso capsule center above the hip
+const HEAD_CENTER_M = 0.75;
+const BLADE_PLANTED_Y_M = -0.75; // blade center height while pulling: half under the surface
+const BLADE_RECOVERY_LIFT_M = 0.45; // how far the blade rises at mid-recovery
+const SHAFT_SWING_RAD = 0.42; // shaft angle from vertical at the catch (forward) and exit (aft)
+const SHAFT_CANT_RAD = 0.19; // the blade sits outboard of the top hand, as on a real paddle
+const TORSO_PITCH_CATCH_RAD = 0.4; // leaning forward into the reach
+const TORSO_PITCH_EXIT_RAD = -0.1; // finishing slightly upright/back
+const TOP_HAND_AHEAD_OF_HEAD_M = 0.15;
+const TOP_HAND_LATERAL_M = 0.25; // top hand's distance from the centerline
+
+export interface PaddlePose {
+  /** Where to put the paddle group, in the figure frame. */
+  position: THREE.Vector3;
+  rotation: THREE.Euler;
+  /** Forward lean of the torso about the hip, in radians (positive = toward +x). */
+  torsoPitch: number;
+}
+
+/** The paddle and body pose for one moment of a forward stroke, from forwardStrokePose()'s
+ * sweep (-1 catch .. +1 exit) and lift. `side` is 0 (port) or 1 (starboard); port is local -Z,
+ * matching the ama's port rigging.
+ *
+ * The paddle swings about the top hand, not the middle of the shaft, so the shaft angle sweeps
+ * the blade through an arc. The top hand rides with the leaning torso (forward at the catch),
+ * and its height is set so the blade stays at a constant depth through the drive and rises
+ * clear of the water only during recovery.
  */
-function applyPaddlePose(
-  paddle: THREE.Group,
-  torso: THREE.Mesh | null,
-  side: number,
-  sweep: number,
-  lift: number,
-): void {
+export function paddlePose(side: number, sweep: number, lift: number): PaddlePose {
   const sideSign = side === 0 ? -1 : 1;
-  paddle.position.set(sweep * 0.35, 0.65 + lift * 0.35, sideSign * (0.55 + 0.1 * lift));
-  // The paddle's default cylinder axis is local Y (vertical). Rotating about local X tips Y
-  // toward Z (lateral -- out to the paddling side); rotating about local Z tips Y toward X
-  // (fore-aft -- the stroke's sweep). These were swapped before, which made every paddle point
-  // forward along the hull instead of out to the side into the water. The lateral tip is a
-  // shallow cant (~10 deg), not a hard lean -- a real paddle is held close to vertical, angled
-  // only slightly outward from the top hand to the blade in the water.
-  paddle.rotation.x = sideSign * 0.18;
-  paddle.rotation.z = -sweep * 0.3;
-  if (torso) torso.rotation.x = -sweep * 0.12; // slight forward lean at the catch
+  const torsoPitch =
+    (TORSO_PITCH_CATCH_RAD + TORSO_PITCH_EXIT_RAD) / 2 -
+    ((TORSO_PITCH_CATCH_RAD - TORSO_PITCH_EXIT_RAD) / 2) * sweep;
+  // Positive shaft pitch puts the blade ahead of the hand (rotation about local Z tips the
+  // shaft's bottom toward +x); the cant about X tips the blade outward to the paddling side.
+  const shaftPitch = -SHAFT_SWING_RAD * sweep;
+  const rotation = new THREE.Euler(-sideSign * SHAFT_CANT_RAD, 0, shaftPitch);
+
+  const bladeY = BLADE_PLANTED_Y_M + BLADE_RECOVERY_LIFT_M * lift;
+  const hand = new THREE.Vector3(
+    HEAD_CENTER_M * Math.sin(torsoPitch) + TOP_HAND_AHEAD_OF_HEAD_M,
+    bladeY + TOP_HAND_TO_BLADE_M * Math.cos(shaftPitch) * Math.cos(SHAFT_CANT_RAD),
+    sideSign * TOP_HAND_LATERAL_M,
+  );
+  // The group's origin is the middle of the shaft, so back off from the hand by the rotated
+  // half-shaft to put the shaft's top end exactly on the hand.
+  const topOffset = new THREE.Vector3(0, SHAFT_HALF_LENGTH_M, 0).applyEuler(rotation);
+  return { position: hand.sub(topOffset), rotation, torsoPitch };
+}
+
+/** Leans a figure's torso and head forward by `pitch` radians about the hip (the figure's origin). */
+function poseTorso({ torso, head }: CrewFigure, pitch: number): void {
+  torso.rotation.z = -pitch; // rotation about +Z tips +Y toward -X, so a forward lean is negative
+  torso.position.set(TORSO_CENTER_M * Math.sin(pitch), TORSO_CENTER_M * Math.cos(pitch), 0);
+  head.position.set(HEAD_CENTER_M * Math.sin(pitch), HEAD_CENTER_M * Math.cos(pitch), 0);
+}
+
+/** Poses a figure's paddle and body for a forward stroke at the given sweep/lift. */
+function applyForwardStroke(figure: CrewFigure, side: number, sweep: number, lift: number): void {
+  const { position, rotation, torsoPitch } = paddlePose(side, sweep, lift);
+  figure.paddle.position.copy(position);
+  figure.paddle.rotation.copy(rotation);
+  poseTorso(figure, torsoPitch);
 }
 
 /** One paddler: a capsule torso, sphere head, and a small paddle, bright enough to read clearly
@@ -180,7 +231,7 @@ function buildCrewFigure(): CrewFigure {
   const paddle = buildPaddleMesh(PADDLE_COLORS.forward);
   paddle.position.y = 0.65;
   group.add(torso, head, paddle);
-  return { group, paddle, torso };
+  return { group, paddle, torso, head };
 }
 
 /** A paddle shaft plus blade, colored by stroke type. Shared by the steersman's paddle and
@@ -262,7 +313,7 @@ function buildCanoeMesh(hullColor: number): BoatVisual {
   );
   trackerLine.computeLineDistances();
 
-  return { group, paddle: steersman.paddle, crew, headingArrow, trackerLine };
+  return { group, steersman, crew, headingArrow, trackerLine };
 }
 
 const OCEAN_VERTEX_SHADER = /* glsl */ `
@@ -517,7 +568,7 @@ export class AmaFlowScene {
     const { sweep, lift } = forwardStrokePose(phase);
     this.boats[which].crew.forEach((figure, seat) => {
       const side = seatSide(PRESETS.crew, seat, strokeIndex);
-      applyPaddlePose(figure.paddle, figure.torso, side, sweep, lift);
+      applyForwardStroke(figure, side, sweep, lift);
     });
   }
 
@@ -527,18 +578,20 @@ export class AmaFlowScene {
    * with the real stroke type rather than always-forward.
    */
   setStroke(which: BoatId, side: number, strokeType: number, phase: number): void {
-    const paddle = this.boats[which].paddle;
+    const figure = this.boats[which].steersman;
+    const paddle = figure.paddle;
     const key = STROKE_TYPE_KEYS[strokeType] ?? 'forward';
     if (key === 'forward') {
       const { sweep, lift } = forwardStrokePose(phase);
-      applyPaddlePose(paddle, null, side, sweep, lift);
+      applyForwardStroke(figure, side, sweep, lift);
     } else {
+      poseTorso(figure, 0); // no reach for these strokes; undo any lean left by a forward stroke
       // Draw/poke/rudder don't have a drive/recovery cycle in the physics -- just show the
       // blade planted on the working side with a small flourish through the stroke.
       const sideSign = side === 0 ? -1 : 1; // port -> local -Z, starboard -> local +Z
       const swing = Math.sin(Math.min(phase, 1) * Math.PI); // 0 at start/end, peak mid-stroke
       paddle.position.set(0, 0.65, sideSign * (0.55 + 0.15 * swing));
-      paddle.rotation.x = sideSign * 0.18; // a shallow cant, not a hard lean (see applyPaddlePose)
+      paddle.rotation.x = -sideSign * SHAFT_CANT_RAD; // blade outboard of the hand, as in paddlePose
       paddle.rotation.z = -0.3 + 0.5 * swing;
     }
 
