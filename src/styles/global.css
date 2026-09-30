@@ -9,7 +9,7 @@
 html, body {
   height: 100%;
   font-family: "Courier Prime", monospace;
-  background-color: #222a68;
+  background-color: #161b33;
   color: white;
 }
 
@@ -101,7 +101,7 @@ a:hover {
 }
 
 .content-container--wide {
-  max-width: 900px;
+  max-width: 1200px;
 }
 
 /* ── Site header (compact, non-homepage pages) ──── */
@@ -397,4 +397,588 @@ footer {
 
 .lab-bar-pct {
   text-align: right;
+}
+
+/* ── Lab: Race an RL Paddler ─────────────────────── */
+.af-intro {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  line-height: 1.7;
+}
+
+.af-legend {
+  font-size: 0.95rem;
+}
+
+.af-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 16px 0;
+}
+
+.af-tab {
+  font-family: inherit;
+  font-size: 0.9rem;
+  color: white;
+  background: transparent;
+  border: 1px solid white;
+  border-radius: 4px;
+  padding: 6px 14px;
+  cursor: pointer;
+  opacity: 0.6;
+}
+
+.af-tab[aria-selected='true'] {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.af-game {
+  display: flex;
+  justify-content: center;
+}
+
+.af-canvas-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 900px;
+}
+
+.af-progress-track {
+  position: relative;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+
+.af-progress-marker {
+  position: absolute;
+  top: -3px;
+  width: 10px;
+  height: 16px;
+  border-radius: 2px;
+  transform: translateX(-50%);
+  transition: left 0.1s linear;
+}
+
+.af-progress-marker--blue {
+  background: #8b8bff;
+}
+
+.af-progress-marker--red {
+  background: #e05a5a;
+}
+
+.af-progress-finish {
+  position: absolute;
+  right: 0;
+  top: -4px;
+  width: 3px;
+  height: 18px;
+  background: #ffe14d;
+  border-radius: 1px;
+}
+
+.af-canvas-wrap {
+  position: relative;
+}
+
+.af-canvas {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #04101c;
+  border: 2px solid white;
+  border-radius: 8px;
+  display: block;
+}
+
+.af-compass {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 10px;
+  padding: 10px;
+}
+
+.af-compass-rose {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+/* A fixed tick at the top marking the boat's own forward direction, since every needle below is
+   drawn relative to it (rotate(0deg) means "dead ahead"). */
+.af-compass-rose-marker {
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 8px solid rgba(255, 255, 255, 0.8);
+}
+
+/* Each needle pivots at the dial's center (transform-origin: bottom) and points outward toward
+   the rim at rotate(0deg) -- the same "0 = up" convention compassRotationDeg's callers assume.
+   A drop-shadow outline keeps each needle legible against the others when they nearly overlap. */
+.af-compass-needle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  margin-left: -6px;
+  margin-top: -38px;
+  transform-origin: 50% 38px;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 38px solid currentColor;
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.9)) drop-shadow(0 0 2px rgba(0, 0, 0, 0.9));
+}
+
+.af-compass-needle--target {
+  color: #4ade80;
+}
+
+.af-compass-needle--wind {
+  color: #ffffff;
+}
+
+.af-compass-needle--current {
+  color: #59d6ff;
+}
+
+.af-compass-legend {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  /* Wide enough to fit all three items on one line -- at the old, narrower max-width they wrapped
+     to three separate lines, making the compass block taller than the status HUD below it (see
+     .af-status-hud) accounted for. */
+  max-width: 220px;
+}
+
+.af-compass-legend-item {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: white;
+  white-space: nowrap;
+}
+
+.af-compass-legend-item::before {
+  content: '●';
+  margin-right: 3px;
+}
+
+.af-compass-legend-item--target::before {
+  color: #4ade80;
+}
+
+.af-compass-legend-item--wind::before {
+  color: #ffffff;
+}
+
+.af-compass-legend-item--current::before {
+  color: #59d6ff;
+}
+
+.af-minimap {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 6px;
+}
+
+.af-status-hud {
+  /* Below the compass/minimap row (each ~150-160px tall from the top), not alongside it -- at
+     the same top offset this centered, roughly-390px-wide element overlapped both. */
+  position: absolute;
+  top: 172px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+}
+
+.af-status-hud-item {
+  background: rgba(0, 0, 0, 0.55);
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.af-status-hud-item--blue {
+  color: #8b8bff;
+}
+
+.af-status-hud-item--red {
+  color: #e05a5a;
+}
+
+.af-control-hud {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+}
+
+/* :not([hidden]) rather than a bare `display: flex` above -- an explicit `display` in author
+   CSS overrides the UA stylesheet's `[hidden] { display: none }` regardless of specificity, so
+   the un-toggled rule would show this even while the `hidden` attribute is set. */
+.af-control-hud:not([hidden]) {
+  display: flex;
+}
+
+.af-control-hud-row {
+  display: flex;
+  gap: 6px;
+}
+
+.af-control-key {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.45);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.af-control-key--active {
+  background: #8b8bff;
+  border-color: #8b8bff;
+  color: #04101c;
+  font-weight: 700;
+}
+
+.af-hud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 0.85rem;
+}
+
+.af-hud-item--blue {
+  color: #8b8bff;
+}
+
+.af-hud-item--red {
+  color: #e05a5a;
+}
+
+.af-camera-toggle {
+  font-family: inherit;
+  font-size: 0.8rem;
+  color: white;
+  background: transparent;
+  border: 1px solid white;
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+  margin-left: auto;
+}
+
+.af-camera-toggle:hover {
+  opacity: 0.8;
+}
+
+.af-status {
+  min-height: 1.4rem;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.af-model-states {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 0.9rem;
+}
+
+/* Each side's status text (heading error / speed / stroke type) changes length every stroke
+   ("port forward" vs. "starboard rudder"), which without a fixed basis reflows the flex item's
+   width and visibly shifts the other side's text left/right in lockstep. An equal flex-basis
+   pins both to a stable half-width column so only the text inside moves, not its start position. */
+.af-model-states .af-hud-item {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.af-play-directions {
+  flex-direction: column;
+  gap: 12px;
+  line-height: 1.6;
+  font-size: 0.9rem;
+}
+
+/* :not([hidden]) rather than a bare `display: flex` -- an explicit `display` in author CSS
+   overrides the UA stylesheet's `[hidden] { display: none }` regardless of specificity (see
+   .af-control-hud, which had the identical bug fixed the same way). */
+.af-play-directions:not([hidden]) {
+  display: flex;
+}
+
+.af-blue {
+  color: #8b8bff;
+}
+
+.af-red {
+  color: #e05a5a;
+}
+
+.af-keys {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+}
+
+.af-keys kbd {
+  font-family: inherit;
+  border: 1px solid white;
+  border-radius: 4px;
+  padding: 1px 7px;
+  margin-right: 4px;
+}
+
+.af-hint {
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+
+.af-button {
+  font-family: inherit;
+  font-size: 0.85rem;
+  color: white;
+  background: transparent;
+  border: 1px solid white;
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+  align-self: flex-start;
+}
+
+.af-button:hover {
+  opacity: 0.8;
+}
+
+.af-results {
+  /* An overlay centered on the canvas, since it only appears once, at the end of a race --
+     unlike the persistent per-frame HUD elements, a one-time reveal reads fine on top of the
+     view instead of competing with it for a spot below. */
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 90%;
+  background: rgba(4, 16, 28, 0.92);
+  border: 2px solid white;
+  border-radius: 8px;
+  padding: 16px 20px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.af-results-margin {
+  margin: 0 0 12px;
+  opacity: 0.85;
+  font-size: 0.9rem;
+}
+
+.af-results-table {
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin: 0 auto;
+}
+
+.af-results-table th,
+.af-results-table td {
+  padding: 6px 14px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.af-results-table th:first-child,
+.af-results-table td:first-child {
+  text-align: left;
+}
+
+.af-results-table th {
+  opacity: 0.7;
+  font-weight: normal;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.af-results-row--blue td:first-child {
+  color: #8b8bff;
+}
+
+.af-results-row--red td:first-child {
+  color: #e05a5a;
+}
+
+.af-results-row--winner {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.af-results-time {
+  margin: 12px 0;
+  opacity: 0.85;
+  font-size: 0.85rem;
+}
+
+/* Model picker and per-model info (Lab: Race an RL Paddler) */
+.af-model-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px;
+  font-size: 0.9rem;
+}
+
+.af-model-select {
+  font-family: inherit;
+  font-size: 0.9rem;
+  color: white;
+  background: transparent;
+  border: 1px solid white;
+  border-radius: 4px;
+  padding: 4px 8px;
+  max-width: 100%;
+}
+
+.af-model-select option {
+  color: black;
+}
+
+.af-model-info {
+  width: 100%;
+  min-width: 0;
+  max-width: 900px;
+  margin: 24px auto 0;
+}
+
+.af-model-title {
+  font-size: 1.1rem;
+  margin-bottom: 4px;
+}
+
+.af-model-note {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin-bottom: 8px;
+}
+
+.af-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.af-chip {
+  font-size: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+
+.af-details {
+  border-top: 1px solid rgba(255, 255, 255, 0.25);
+  padding: 8px 0;
+  font-size: 0.85rem;
+}
+
+.af-details > summary {
+  cursor: pointer;
+}
+
+.af-details[open] > summary {
+  margin-bottom: 8px;
+}
+
+.af-param-group h4 {
+  font-size: 0.8rem;
+  opacity: 0.7;
+  margin: 12px 0 4px;
+}
+
+.af-params {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px 16px;
+}
+
+.af-params dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.af-details .af-results-table {
+  margin: 8px 0 0;
+}
+
+.af-grid-win td:last-child {
+  color: #8b8bff;
+}
+
+.af-details .af-hint {
+  margin-bottom: 8px;
+}
+
+.af-curves {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.af-curve {
+  margin: 0;
+}
+
+.af-curve figcaption {
+  font-size: 0.8rem;
+  margin-bottom: 4px;
+}
+
+.af-curve figcaption span {
+  opacity: 0.6;
+}
+
+.af-curve svg {
+  width: 100%;
+  height: auto;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+  border-left: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+@media (max-width: 500px) {
+  .af-details .af-results-table {
+    display: block;
+    overflow-x: auto;
+  }
 }
