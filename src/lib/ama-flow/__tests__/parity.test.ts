@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import parityData from '../../../data/ama-flow/parity.json';
 import { advanceStroke, buildObservation, type Conditions, type State } from '../physics';
-import { baselineAction, policyAction } from '../policy';
+import { baselineAction, policyAction, POLICY_ENTRIES } from '../policy';
 import { PRESETS } from '../presets';
 
 interface ParityStep {
@@ -28,7 +28,6 @@ interface ParityObsAction {
 
 interface ParityData {
   trajectories: ParityTrajectory[];
-  policy_obs_actions: ParityObsAction[];
   baseline_obs_actions: ParityObsAction[];
 }
 
@@ -77,12 +76,15 @@ describe('buildObservation matches ama-flow', () => {
   }
 });
 
-describe('policyAction matches the trained model', () => {
-  it('agrees with model.predict(obs, deterministic=True) on every parity pair', () => {
-    for (const { obs, action } of PARITY.policy_obs_actions) {
-      expect(policyAction(obs)).toBe(action);
-    }
-  });
+describe('policyAction matches each trained model', () => {
+  for (const entry of POLICY_ENTRIES) {
+    it(`${entry.meta.id} agrees with model.predict(obs, deterministic=True) on every parity pair`, () => {
+      expect(entry.parity_obs_actions.length).toBeGreaterThan(0);
+      for (const { obs, action } of entry.parity_obs_actions) {
+        expect(policyAction(obs, entry.meta.id)).toBe(action);
+      }
+    });
+  }
 });
 
 describe('baselineAction matches ama_flow.agents.baseline.baseline_action', () => {

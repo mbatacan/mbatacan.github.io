@@ -6,7 +6,7 @@ This file provides guidance to Codex (Codex.ai/code) when working with code in t
 
 Static personal portfolio/blog site built with [Astro](https://astro.build) and hosted on GitHub Pages. Dark navy theme (`#161b33`), monospace (Courier Prime) font, no JavaScript framework.
 
-**This is a static site with no server.** Anything that needs a backend or a secret (a database, a hosted-LLM API call with your own key, etc.) doesn't belong here — it would either not work at all on GitHub Pages, or leak the secret into the public bundle. The `/lab` demos run entirely client-side for this reason: `fool-the-classifier` fetches its ONNX weights from a public CDN, and `rl-paddler` bundles a small trained policy's weights directly (`src/data/ama-flow/policy.json`) plus a from-scratch TypeScript port of the physics they run on — both do inference in the visitor's browser, nothing is sent anywhere.
+**This is a static site with no server.** Anything that needs a backend or a secret (a database, a hosted-LLM API call with your own key, etc.) doesn't belong here — it would either not work at all on GitHub Pages, or leak the secret into the public bundle. The `/lab` demos run entirely client-side for this reason: `fool-the-classifier` fetches its ONNX weights from a public CDN, and `rl-paddler` bundles a small trained policy's weights directly (`src/data/ama-flow/policies/<name>.json`) plus a from-scratch TypeScript port of the physics they run on — both do inference in the visitor's browser, nothing is sent anywhere.
 
 ## Commands
 
@@ -52,8 +52,9 @@ src/
     quickdraw-game-classes.ts  # Curated subset used as game targets
     ama-flow/
       presets.json  # OC6 physics/baseline constants, exported from the ama-flow repo
-      policy.json   # Trained PPO policy's MLP weights, exported from the ama-flow repo
-      parity.json   # Golden trajectories/obs->action pairs checked in src/lib/ama-flow's tests
+      policies/     # One <id>.json per curated checkpoint (weights + MLflow params/eval grid/curves + its own
+                    # parity pairs) and index.json (default + picker order), all exported from ama-flow
+      parity.json   # Model-independent golden trajectories + baseline obs->action pairs, checked in src/lib/ama-flow's tests
   lib/
     github.ts              # fetchRecentActivity() — GitHub API calls, runs at build time only
     ama-flow/               # From-scratch TS port of ama-flow's physics core + trained policy,
@@ -86,6 +87,16 @@ Post content in Markdown...
 ```
 
 The blog index auto-updates — no manual link list needed. The URL becomes `/blog/<slug>`.
+
+## Adding/updating a model on /lab/rl-paddler
+
+The picker and info panel are generated from `src/data/ama-flow/policies/` -- don't hand-edit those files. In the **ama-flow** repo, edit `configs/web_models.yaml` (one entry per hand-picked run + checkpoint step, with a label and one-line note), then re-export into this repo:
+
+```bash
+uv run python -m ama_flow.export.web --manifest configs/web_models.yaml --out ../mbatacan.github.io/src/data/ama-flow
+```
+
+Commit the regenerated `presets.json`, `parity.json` and `policies/`, then run `npm test` -- every entry's weights are checked against its own Python obs->action pairs. The export recomputes each checkpoint's eval grid (slow, a few minutes per entry) because MLflow only stores one for a run's final model. Every entry must have been trained on the physics in `presets.json`.
 
 ## Adding a page
 

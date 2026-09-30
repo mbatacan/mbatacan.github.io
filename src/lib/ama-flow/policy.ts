@@ -1,8 +1,8 @@
-// A from-scratch forward pass over the exported PPO policy MLP (src/data/ama-flow/policy.json),
+// A from-scratch forward pass over the exported PPO policy MLP (src/data/ama-flow/policies/<name>.json),
 // plus the scripted baseline steersman. Checked against ama-flow's own model.predict() via
 // src/data/ama-flow/parity.json (see parity.test.ts) -- no onnxruntime needed, since the
 // exported network is tiny (18 -> 64 -> 64 -> 8, tanh-activated).
-import policyData from '../../data/ama-flow/policy.json';
+import policyIndex from '../../data/ama-flow/policies/index.json';
 import { ObsIndex, PRESETS } from './presets';
 
 interface PolicyLayer {
@@ -11,13 +11,46 @@ interface PolicyLayer {
   activation: 'tanh' | 'none';
 }
 
-interface PolicyJson {
+/** What ama-flow's export writes about a checkpoint besides its weights (see export/web.py). */
+export interface PolicyMeta {
+  id: string;
+  label: string;
+  note: string;
+  run_id: string;
+  step: number;
+  params: Record<string, string>; // the MLflow run's params, all strings
+  eval_grid: { columns: string[]; data: (number | boolean)[][] };
+  curve: Record<string, [number, number][]>; // metric -> [step, value], up to `step`
+}
+
+export interface PolicyEntry {
   obs_size: number;
   num_actions: number;
   layers: PolicyLayer[];
+  meta: PolicyMeta;
+  parity_obs_actions: { obs: number[]; action: number }[];
 }
 
-const POLICY = policyData as PolicyJson;
+const POLICY_FILES = import.meta.glob<PolicyEntry>(
+  ['../../data/ama-flow/policies/*.json', '!../../data/ama-flow/policies/index.json'],
+  { eager: true, import: 'default' },
+);
+
+/** Which entry loads first, and the order the picker lists them in: set by ama-flow's manifest. */
+export const DEFAULT_POLICY_ID: string = policyIndex.default;
+
+/** Every published entry, in manifest order. */
+export const POLICY_ENTRIES: PolicyEntry[] = policyIndex.order.map((id) => {
+  const entry = POLICY_FILES[`../../data/ama-flow/policies/${id}.json`];
+  if (!entry) {
+    throw new Error(
+      `policies/index.json lists "${id}" but policies/${id}.json is missing (found: ${Object.keys(POLICY_FILES).join(', ')})`,
+    );
+  }
+  return entry;
+});
+
+const POLICY_BY_ID = new Map(POLICY_ENTRIES.map((entry) => [entry.meta.id, entry]));
 
 function linear(weight: number[][], bias: number[], input: ArrayLike<number>): number[] {
   const out = new Array<number>(weight.length);
@@ -40,13 +73,15 @@ function argmax(values: number[]): number {
   return bestIndex;
 }
 
-/** The trained policy's deterministic action for an observation: argmax of the logits.
+/** A trained policy's deterministic action for an observation: argmax of the logits.
  * Equivalent to SB3's model.predict(obs, deterministic=True) for a Categorical action
  * distribution, since argmax is invariant to softmax.
  */
-export function policyAction(obs: ArrayLike<number>): number {
+export function policyAction(obs: ArrayLike<number>, id: string = DEFAULT_POLICY_ID): number {
+  const policy = POLICY_BY_ID.get(id);
+  if (!policy) throw new Error(`unknown policy "${id}" (have: ${[...POLICY_BY_ID.keys()].join(', ')})`);
   let x: number[] = Array.from(obs);
-  for (const layer of POLICY.layers) {
+  for (const layer of policy.layers) {
     x = linear(layer.weight, layer.bias, x);
     if (layer.activation === 'tanh') {
       x = x.map(Math.tanh);
