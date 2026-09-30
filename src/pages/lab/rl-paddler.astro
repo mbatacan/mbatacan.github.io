@@ -46,7 +46,7 @@ function curvePoints(points: [number, number][], totalSteps: number): { line: st
 
 <BaseLayout
   title="Race an RL Paddler — Matthew Batacan"
-  description="Race a PPO-trained outrigger canoe steersman in 3D, or watch it duel a hand-coded baseline -- both running entirely in your browser."
+  description="Race or watch PPO-trained outrigger canoe steersmen in 3D, switch between several trained checkpoints, and see the settings and results behind each -- all running entirely in your browser."
   wide
 >
   <SiteHeader />
@@ -57,8 +57,8 @@ function curvePoints(points: [number, number][], totalSteps: number): { line: st
       the physics, training and evaluation are all in
       {' '}<a href="https://github.com/mbatacan/ama-flow" target="_blank" rel="noopener">ama-flow</a>,
       a separate repo. This page is a from-scratch TypeScript port of that physics core and a
-      tiny re-implementation of the trained policy's neural net, checked against the Python
-      original stroke by stroke. Nothing is sent anywhere; everything below runs in your browser.
+      tiny re-implementation of each trained policy's neural net, checked against the Python
+      original stroke by stroke. Pick a checkpoint below to swap the model. Nothing is sent anywhere; everything below runs in your browser.
     </p>
     <p id="af-legend-watch" class="af-legend">
       <strong class="af-blue">blue</strong> is the selected trained model &middot;
@@ -183,6 +183,14 @@ function curvePoints(points: [number, number][], totalSteps: number): { line: st
             <span class="af-chip">run {m.run_id.slice(0, 8)}</span>
             <span class="af-chip">{m.step / 1000}k of {total / 1000}k steps</span>
             <span class="af-chip">seed {m.params.seed}</span>
+            {m.registry && <span class="af-chip">registry v{m.registry.version}</span>}
+          </p>
+          <p class="af-chips">
+            <span class="af-chip">ent_coef {m.params.ent_coef}</span>
+            <span class="af-chip">lr {m.params.learning_rate}</span>
+            <span class="af-chip">gamma {m.params.gamma}</span>
+            <span class="af-chip">{m.params.n_envs} envs</span>
+            <span class="af-chip">wind arm {m.params.hull_wind_cp_offset_m} m</span>
           </p>
 
           <details class="af-details">
@@ -198,7 +206,7 @@ function curvePoints(points: [number, number][], totalSteps: number): { line: st
           </details>
 
           <details class="af-details">
-            <summary>Results vs baseline</summary>
+            <summary>Results vs baseline <span class="af-summary-note">&middot; won {gridRows(m).filter((r) => r.agent_beats_baseline).length}/{m.eval_grid.data.length} cells</span></summary>
             <p class="af-hint">Cross-wind and cross-current, 10 episodes per cell. Lower heading error and higher speed are better; the baseline is the hand-coded steersman.</p>
             <table class="af-results-table">
               <thead>
@@ -317,6 +325,7 @@ function curvePoints(points: [number, number][], totalSteps: number): { line: st
   const SPEED = STROKE_DURATION_S / STROKE_PERIOD_S; // sim-seconds per real second
 
   let mode: Mode = 'watch';
+  let modelLabel = 'model'; // the selected checkpoint's label, set by applySelectedModel()
   let duel = new Duel(randomConditions(Math.floor(Math.random() * 1_000_000)));
   let scene: AmaFlowScene | null = null; // set once the dynamic import below resolves
   let running = false;
@@ -368,8 +377,8 @@ function curvePoints(points: [number, number][], totalSteps: number): { line: st
 
   function finish(): void {
     running = false;
-    const blueLabel = mode === 'watch' ? 'model' : 'you';
-    const redLabel = mode === 'watch' ? 'baseline' : 'model';
+    const blueLabel = mode === 'watch' ? modelLabel : 'you';
+    const redLabel = mode === 'watch' ? 'baseline' : modelLabel;
     const blueRms = duel.rmsHeadingErrorDeg(bluePlayerSide());
     const redRms = duel.rmsHeadingErrorDeg(redOpponentSide());
     const blueVmg = duel.distanceMadeGoodM(bluePlayerSide());
@@ -428,6 +437,7 @@ function curvePoints(points: [number, number][], totalSteps: number): { line: st
     raceStartMs = performance.now();
     elapsedRaceS = 0;
     hudTimeEl.textContent = '0.0s';
+    hudStrokeEl.textContent = `stroke 0/${EPISODE_STROKES}`;
     resultsEl.hidden = true;
     running = true;
     scene?.setConditions(duel.conditions);
@@ -451,8 +461,8 @@ function curvePoints(points: [number, number][], totalSteps: number): { line: st
     playDirectionsEl.hidden = next !== 'play';
     legendWatchEl.hidden = next !== 'watch';
     legendPlayEl.hidden = next !== 'play';
-    hudBlueEl.textContent = next === 'watch' ? 'blue (model): —' : 'blue (you): —';
-    hudRedEl.textContent = next === 'watch' ? 'red (baseline): —' : 'red (model): —';
+    hudBlueEl.textContent = next === 'watch' ? `blue (${modelLabel}): —` : 'blue (you): —';
+    hudRedEl.textContent = next === 'watch' ? 'red (baseline): —' : `red (${modelLabel}): —`;
     speedToggleBtn.hidden = next !== 'watch';
     speedMultiplier = 1;
     speedToggleBtn.textContent = '1x speed';
@@ -464,6 +474,7 @@ function curvePoints(points: [number, number][], totalSteps: number): { line: st
   /** Points the game at the selected checkpoint and shows only that entry's info panel. */
   function applySelectedModel(): void {
     setSelectedPolicy(modelSelectEl.value);
+    modelLabel = modelSelectEl.selectedOptions[0].textContent ?? modelSelectEl.value;
     document.querySelectorAll<HTMLElement>('.af-model-entry').forEach((el) => {
       el.hidden = el.dataset.modelId !== modelSelectEl.value;
     });
@@ -572,8 +583,8 @@ function curvePoints(points: [number, number][], totalSteps: number): { line: st
         { x: renderStates.opponent[0], y: renderStates.opponent[1], headingRad: renderStates.opponent[2], color: '#e05a5a' },
       ]);
 
-      const blueLabel = mode === 'watch' ? 'model' : 'you';
-      const redLabel = mode === 'watch' ? 'baseline' : 'model';
+      const blueLabel = mode === 'watch' ? modelLabel : 'you';
+      const redLabel = mode === 'watch' ? 'baseline' : modelLabel;
       const blueErr = duel.history('player').headingErrorDeg.at(-1) ?? 0;
       const redErr = duel.history('opponent').headingErrorDeg.at(-1) ?? 0;
       const blueSpeedKt = renderStates.player[3] * MPS_TO_KT;

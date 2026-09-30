@@ -21,7 +21,7 @@ export const LAB_PROJECTS: LabProject[] = [
   {
     title: 'Race an RL Paddler',
     description:
-      'A 3D outrigger canoe race against a PPO policy trained offline in a separate repo (ama-flow) and shipped as a small in-browser model, or watch it duel a hand-coded baseline.',
+      'A 3D outrigger canoe race against PPO policies trained offline in a separate repo (ama-flow) and shipped as small in-browser models. Switch between several checkpoints, see the settings and results behind each, or watch one duel a hand-coded baseline.',
     status: 'completed',
     href: '/lab/rl-paddler',
   },
