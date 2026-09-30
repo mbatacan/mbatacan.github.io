@@ -437,6 +437,7 @@ function curvePoints(points: [number, number][], totalSteps: number): { line: st
     raceStartMs = performance.now();
     elapsedRaceS = 0;
     hudTimeEl.textContent = '0.0s';
+    hudStrokeEl.textContent = `stroke 0/${EPISODE_STROKES}`;
     resultsEl.hidden = true;
     running = true;
     scene?.setConditions(duel.conditions);
