@@ -1,7 +1,7 @@
 ---
 import { getCollection, render } from 'astro:content';
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import ProfileHeader from '../../components/ProfileHeader.astro';
+import SiteHeader from '../../components/SiteHeader.astro';
 import Footer from '../../components/Footer.astro';
 
 export async function getStaticPaths() {
@@ -17,12 +17,12 @@ const { Content } = await render(post);
 ---
 
 <BaseLayout title={`${post.data.title} — Matthew Batacan`} description={post.data.description}>
-  <ProfileHeader />
+  <SiteHeader />
 
   <article class="post-content">
     <p class="post-meta">{post.data.date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}</p>
     <Content />
   </article>
 
-  <Footer links={[{ label: 'Home', href: '/' }, { label: 'Blog', href: '/blog' }, { label: 'Lab', href: '/lab/fool-the-classifier' }, { label: 'Log', href: '/log' }]} />
+  <Footer />
 </BaseLayout>

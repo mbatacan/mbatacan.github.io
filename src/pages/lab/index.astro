@@ -1,0 +1,62 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import SiteHeader from '../../components/SiteHeader.astro';
+import Footer from '../../components/Footer.astro';
+import { LAB_PROJECTS } from '../../data/lab-projects';
+
+const completed = LAB_PROJECTS.filter(p => p.status === 'completed');
+const inProgress = LAB_PROJECTS.filter(p => p.status === 'in-progress');
+const ideas = LAB_PROJECTS.filter(p => p.status === 'idea');
+---
+
+<BaseLayout
+  title="Lab — Matthew Batacan"
+  description="Small, interactive machine-learning demos that run entirely in your browser."
+>
+  <SiteHeader />
+
+  <section>
+    <div class="lab-gallery">
+      {completed.map(project => {
+        const isExternal = project.href?.startsWith('http');
+        return (
+          <a
+            class="lab-card"
+            href={project.href}
+            target={isExternal ? '_blank' : undefined}
+            rel={isExternal ? 'noopener' : undefined}
+          >
+            <h3 class="lab-card-title">{project.title}</h3>
+            <p class="lab-card-description">{project.description}</p>
+          </a>
+        );
+      })}
+    </div>
+  </section>
+
+  <section>
+    <h2 class="lab-section-title">In Progress</h2>
+    <div class="lab-gallery">
+      {inProgress.map(project => (
+        <div class="lab-card lab-card--in-progress">
+          <h3 class="lab-card-title">{project.title}</h3>
+          <p class="lab-card-description">{project.description}</p>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <section>
+    <h2 class="lab-section-title">Ideas</h2>
+    <div class="lab-gallery">
+      {ideas.map(project => (
+        <div class="lab-card lab-card--in-progress">
+          <h3 class="lab-card-title">{project.title}</h3>
+          <p class="lab-card-description">{project.description}</p>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <Footer />
+</BaseLayout>

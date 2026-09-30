@@ -1,16 +1,7 @@
 ---
-interface Props {
-  links: { label: string; href: string }[];
-}
-
-const { links } = Astro.props;
+const year = new Date().getFullYear();
 ---
 
 <footer>
-  <nav class="navigation">
-    {links.map(link => (
-      <a class="nav-link" href={link.href}>{link.label}</a>
-    ))}
-  </nav>
-  <p>© Matthew Batacan 2024</p>
+  <p>© Matthew Batacan {year}</p>
 </footer>

@@ -1,16 +1,43 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import ProfileHeader from '../components/ProfileHeader.astro';
+import SiteNav from '../components/SiteNav.astro';
 import Footer from '../components/Footer.astro';
 ---
 
-<BaseLayout title="Matthew Batacan Portfolio">
+<BaseLayout
+  title="Matthew Batacan"
+  description="Data scientist from Hawaii, BU grad, working on sensor data insights and prognostics at Boeing."
+>
   <ProfileHeader />
-  <nav class="navigation">
-    <a class="nav-link" href="/blog">Blog</a>
-    <a class="nav-link" href="/about">About</a>
-    <a class="nav-link" href="/lab/fool-the-classifier">Lab</a>
-    <a class="nav-link" href="/log">Log</a>
-  </nav>
-  <Footer links={[{ label: 'Blog', href: '/blog' }, { label: 'About', href: '/about' }, { label: 'Lab', href: '/lab/fool-the-classifier' }, { label: 'Log', href: '/log' }]} />
+  <SiteNav />
+
+  <div class="about-bio">
+    <p>
+      I grew up in Honolulu, Hawaii and attended Iolani School. I graduated from
+      Boston University with a degree in Data Science.
+    </p>
+    <p>
+      During undergrad I served as a Technical Project Manager at{' '}
+      <a href="https://www.bu.edu/spark/" target="_blank" rel="noopener">BU Spark!</a>,
+      BU's applied research lab, where I led student data science teams embedded with
+      journalism partners for the Justice Media Co-lab.
+    </p>
+    <p>
+      I interned at IBM as a data scientist working on the ibm.com search engine, and
+      have also worked with a healthcare startup and as a data science tutor.
+    </p>
+    <p>
+      I currently work on sensor data insights, alerting, and prognostics at Boeing.
+    </p>
+  </div>
+
+  <div class="photo-grid">
+    <img src="/assets/icons/iolani-logo.png" alt="Iolani School" />
+    <img src="/assets/icons/bu-logo.jpeg" alt="Boston University" />
+    <img src="/assets/icons/bu-spark.png" alt="BU Spark!" />
+    <img src="/assets/icons/ibm-reebus.png" alt="IBM" />
+  </div>
+
+  <Footer />
 </BaseLayout>

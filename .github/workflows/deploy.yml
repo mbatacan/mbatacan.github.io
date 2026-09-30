@@ -4,8 +4,6 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-  schedule:
-    - cron: '0 12 * * *'
 
 concurrency:
   group: pages
@@ -24,8 +22,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
