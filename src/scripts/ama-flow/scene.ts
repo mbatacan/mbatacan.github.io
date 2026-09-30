@@ -48,6 +48,7 @@ const OCEAN_SEGMENTS = 140;
 const HULL_COLORS: Record<BoatId, number> = { player: 0x8b8bff, opponent: 0xe05a5a };
 const AMA_COLOR = 0xd2b48c;
 const IAKO_COLOR = 0x8c8c8c;
+const IAKO_BASE_Y_M = 0.26;
 // Both boats run identical physics from (0, 0), so without this they'd render exactly on top of
 // each other. This offset is visual only -- applied to the mesh, never to the simulated state.
 const BOAT_LANE_OFFSET_M: Record<BoatId, number> = { player: 5, opponent: -5 };
@@ -277,8 +278,10 @@ function buildCanoeMesh(hullColor: number): BoatVisual {
 
   addPart(outlines.hull, hullColor, 0.5, 0);
   addPart(outlines.ama, AMA_COLOR, 0.25, 0.05);
-  addPart(outlines.forwardIako, IAKO_COLOR, 0.08, 0.35);
-  addPart(outlines.aftIako, IAKO_COLOR, 0.08, 0.35);
+  // The beams sit just low enough to overlap the ama's top face (0.05 + 0.25), so they visibly land
+  // on the float instead of hovering above it; the hull is tall enough (0.5) to swallow their inner end.
+  addPart(outlines.forwardIako, IAKO_COLOR, 0.08, IAKO_BASE_Y_M);
+  addPart(outlines.aftIako, IAKO_COLOR, 0.08, IAKO_BASE_Y_M);
 
   const seatFigures = SEAT_X_POSITIONS.map((x) => {
     const figure = buildCrewFigure();
