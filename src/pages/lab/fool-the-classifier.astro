@@ -48,23 +48,33 @@ import Footer from '../../components/Footer.astro';
 
 <script>
   import labels from '../../data/quickdraw-labels.json';
+  import type { Prediction } from '../../scripts/sketch-classifier';
+
+  /** Look up an element the page markup must contain, failing loudly if it's missing. */
+  function byId<T extends HTMLElement = HTMLElement>(id: string): T {
+    const el = document.getElementById(id);
+    if (!el) throw new Error(`Missing #${id} in the page markup`);
+    return el as T;
+  }
 
   import('../../scripts/sketch-classifier.ts').then(async (classifier) => {
     const { pickTarget, checkWin } = await import('../../scripts/game.ts');
 
-    const canvas = document.getElementById('lab-canvas');
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    const statusEl = document.getElementById('lab-status');
-    const targetEl = document.getElementById('lab-target-word');
-    const streakEl = document.getElementById('lab-streak');
-    const bestEl = document.getElementById('lab-best');
-    const barsEl = document.getElementById('lab-bars');
-    const clearBtn = document.getElementById('lab-clear');
-    const undoBtn = document.getElementById('lab-undo');
-    const skipBtn = document.getElementById('lab-skip');
+    const canvas = byId<HTMLCanvasElement>('lab-canvas');
+    const context = canvas.getContext('2d', { willReadFrequently: true });
+    if (!context) throw new Error('Canvas 2D context unavailable');
+    const ctx: CanvasRenderingContext2D = context; // non-null for the hoisted functions below
+    const statusEl = byId('lab-status');
+    const targetEl = byId('lab-target-word');
+    const streakEl = byId('lab-streak');
+    const bestEl = byId('lab-best');
+    const barsEl = byId('lab-bars');
+    const clearBtn = byId<HTMLButtonElement>('lab-clear');
+    const undoBtn = byId<HTMLButtonElement>('lab-undo');
+    const skipBtn = byId<HTMLButtonElement>('lab-skip');
 
     let drawing = false;
-    let history = [];
+    let history: ImageData[] = [];
     let target = pickTarget();
     let streak = 0;
     let best = 0;
@@ -92,7 +102,7 @@ import Footer from '../../components/Footer.astro';
       if (history.length > 20) history.shift();
     }
 
-    function pointerPos(e) {
+    function pointerPos(e: PointerEvent) {
       const rect = canvas.getBoundingClientRect();
       return {
         x: ((e.clientX - rect.left) / rect.width) * canvas.width,
@@ -142,7 +152,7 @@ import Footer from '../../components/Footer.astro';
       targetEl.textContent = target;
     });
 
-    function renderBars(predictions) {
+    function renderBars(predictions: Prediction[]) {
       barsEl.innerHTML = predictions
         .map((p, i) => {
           const pct = Math.round(p.prob * 100);
@@ -203,7 +213,7 @@ import Footer from '../../components/Footer.astro';
       statusEl.textContent = 'ready — start drawing';
       statusEl.classList.remove('lab-status--error');
     } catch (err) {
-      statusEl.textContent = `Failed to load model: ${err.message ?? err}`;
+      statusEl.textContent = `Failed to load model: ${err instanceof Error ? err.message : String(err)}`;
       statusEl.classList.add('lab-status--error');
       throw err;
     }
