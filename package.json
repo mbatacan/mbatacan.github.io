@@ -2,6 +2,13 @@
   "name": "mbatacan-portfolio",
   "type": "module",
   "version": "1.0.0",
+  "description": "Personal portfolio and blog, with in-browser ML demos, built with Astro",
+  "license": "MIT",
+  "homepage": "https://mbatacan.github.io",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mbatacan/mbatacan.github.io.git"
+  },
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
