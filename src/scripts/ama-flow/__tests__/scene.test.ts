@@ -88,16 +88,27 @@ describe('paddlePose', () => {
 });
 
 describe('dashSpans', () => {
-  it('starts with a dash at 0 and steps by dash + gap', () => {
-    expect(dashSpans(20, 3, 2, 100)).toEqual([[0, 3], [5, 8], [10, 13], [15, 18]]);
+  it('ends the first dash exactly at the end of the line and steps back by dash + gap', () => {
+    expect(dashSpans(20, 3, 2, 100)).toEqual([[17, 20], [12, 15], [7, 10], [2, 5]]);
   });
 
-  it('cuts the last dash short at the end of the line', () => {
-    expect(dashSpans(12, 3, 2, 100)).toEqual([[0, 3], [5, 8], [10, 12]]);
+  it('cuts the dash that would pass the start of the line short', () => {
+    expect(dashSpans(12, 3, 2, 100)).toEqual([[9, 12], [4, 7], [0, 2]]);
   });
 
   it('returns nothing for an empty line, and respects the dash cap', () => {
     expect(dashSpans(0, 3, 2, 100)).toEqual([]);
     expect(dashSpans(1000, 3, 2, 4)).toHaveLength(4);
+  });
+
+  it('keeps the dashes fixed relative to the far end as the near end moves in', () => {
+    // Distances back from the end: the same pattern whatever the line's current length.
+    const fromEnd = (length: number) =>
+      dashSpans(length, 3, 2, 100)
+        .filter(([from]) => from > 0)
+        .map(([from, to]) => [length - to, length - from]);
+    const longer = fromEnd(40);
+    const shorter = fromEnd(37.3);
+    shorter.forEach((span, i) => expect(span).toEqual(longer[i]));
   });
 });

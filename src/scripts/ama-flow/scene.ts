@@ -60,7 +60,8 @@ const BOAT_LANE_OFFSET_M: Record<BoatId, number> = { player: 5, opponent: -5 };
 const FINISH_LINE_HALF_WIDTH_M = FINISH_GATE_HALF_WIDTH_M;
 const FINISH_BUOY_HEIGHT_M = 3;
 const TURN_BUOY_HEIGHT_M = 3;
-const TRACKER_LINE_HEIGHT_M = 1; // above the water, so the dashed tracker doesn't clip into swell
+const TRACKER_LINE_HEIGHT_M = 1; // above mean sea level, so the dashed tracker clears the swell
+const TRACKER_START_AHEAD_M = 9; // starts just past the bow (6.7 m), clear of the hull and the camera's foreground
 const TRACKER_DASH_M = 3;
 const TRACKER_GAP_M = 2;
 const MAX_TRACKER_DASHES = 120; // 120 * 5 m = 600 m, well past any leg of the course
@@ -266,9 +267,12 @@ function buildPaddleMesh(color: number): THREE.Group {
   return paddle;
 }
 
-/** The [start, end] distances along a line of `length` metres for each dash, starting with a
- * dash at 0. The last dash is cut short at the end of the line, and at most `maxDashes` are
- * returned.
+/** The [from, to] distances along a line of `length` metres (measured from its start) for each
+ * dash, laid out from the END of the line backwards: the first dash finishes exactly at `length`.
+ * Anchoring the pattern to the far end (the waypoint) rather than the near end (the boat) keeps
+ * the dashes fixed in the world as the boat moves, so they scroll past smoothly instead of
+ * streaming along the line and flickering. The dash that would run past the start is cut short,
+ * and at most `maxDashes` are returned.
  */
 export function dashSpans(
   length: number,
@@ -277,8 +281,8 @@ export function dashSpans(
   maxDashes: number,
 ): [number, number][] {
   const spans: [number, number][] = [];
-  for (let start = 0; start < length && spans.length < maxDashes; start += dashM + gapM) {
-    spans.push([start, Math.min(start + dashM, length)]);
+  for (let end = length; end > 0 && spans.length < maxDashes; end -= dashM + gapM) {
+    spans.push([Math.max(0, end - dashM), end]);
   }
   return spans;
 }
@@ -606,9 +610,15 @@ export class AmaFlowScene {
    */
   setTrackerTarget(which: BoatId, waypointX: number, waypointY: number): void {
     const boatPosition = this.boats[which].group.position;
-    const y = boatPosition.y + TRACKER_LINE_HEIGHT_M;
-    this.trackerStart.set(boatPosition.x, y, boatPosition.z);
-    this.trackerEnd.set(waypointX, y, -waypointY);
+    // A fixed height above mean sea level, not the boat's own (swell-heaved) height, or the whole
+    // line bobs up and down with every wave.
+    this.trackerStart.set(boatPosition.x, TRACKER_LINE_HEIGHT_M, boatPosition.z);
+    this.trackerEnd.set(waypointX, TRACKER_LINE_HEIGHT_M, -waypointY);
+    // Start the line ahead of the bow: seen from the chase camera the stretch right at the boat is
+    // end-on and foreshortened, so its dashes pile into a flickering smear.
+    const gap = this.trackerStart.distanceTo(this.trackerEnd);
+    if (gap > TRACKER_START_AHEAD_M) this.trackerStart.lerp(this.trackerEnd, TRACKER_START_AHEAD_M / gap);
+    else this.trackerStart.copy(this.trackerEnd);
     this.boats[which].tracker.set(this.trackerStart, this.trackerEnd);
   }
 
