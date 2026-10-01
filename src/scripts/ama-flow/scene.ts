@@ -9,6 +9,7 @@ import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeome
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import { canoeOutlines, HULL_LENGTH_M } from '../../lib/ama-flow/canoe-geometry';
 import { FINISH_GATE_HALF_WIDTH_M } from './game';
+import { Wake } from './wake';
 import { PRESETS } from '../../lib/ama-flow/presets';
 import { currentVelocity, seatSide, type Conditions } from '../../lib/ama-flow/physics';
 import { defaultSwell, waveHeight, waveSlope, type WaveComponent } from '../../lib/ama-flow/waves';
@@ -76,8 +77,8 @@ const CHASE_BACK_DISTANCE_M = HULL_LENGTH_M * 1.0;
 const CHASE_HEIGHT_M = 5;
 const CHASE_LOOK_AHEAD_M = 25; // puts the finish line ahead in frame instead of the boat's beam
 const TOP_DOWN_HEIGHT_M = 45;
-const FOAM_COUNT = 300;
-const FOAM_RADIUS_M = 60; // half-width of the drifting foam patch, recentered under the camera
+const FOAM_COUNT = 500;
+const FOAM_RADIUS_M = 60; // half-width of the foam patch around the camera
 const FOAM_COLOR = 0xffffff;
 
 /** A checkered finish gate: two buoy poles and a bright line between them, so the race has a
@@ -472,6 +473,7 @@ export class AmaFlowScene {
   private waves: WaveComponent[];
   private conditions: Conditions;
   private boats: Record<BoatId, BoatVisual>;
+  private wakes: Record<BoatId, Wake> = { player: new Wake(), opponent: new Wake() };
   private trackerStart = new THREE.Vector3(); // scratch vectors for setTrackerTarget
   private trackerEnd = new THREE.Vector3();
   private lastPsi: Record<BoatId, number> = { player: 0, opponent: 0 };
@@ -479,7 +481,7 @@ export class AmaFlowScene {
   private cameraTarget = new THREE.Vector3();
   private cameraPosition = new THREE.Vector3(0, 20, -30);
   private foam: THREE.Points;
-  private foamBaseXZ: Float32Array; // each fleck's fixed local (x, z) offset before drift/wrap
+  private foamBaseXZ: Float32Array; // each fleck's fixed starting (x, z), before drift and wrap
 
   constructor(canvas: HTMLCanvasElement, conditions: Conditions, waypoints: [number, number][]) {
     this.conditions = conditions;
@@ -542,6 +544,7 @@ export class AmaFlowScene {
       opponent: buildCanoeMesh(HULL_COLORS.opponent, TRACKER_COLORS.opponent),
     };
     this.scene.add(this.boats.player.group, this.boats.opponent.group);
+    this.scene.add(this.wakes.player.mesh, this.wakes.opponent.mesh);
     this.scene.add(this.boats.player.headingArrow, this.boats.opponent.headingArrow);
     this.scene.add(...this.boats.player.tracker.objects, ...this.boats.opponent.tracker.objects);
 
@@ -571,7 +574,7 @@ export class AmaFlowScene {
     foamGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(FOAM_COUNT * 3), 3));
     this.foam = new THREE.Points(
       foamGeometry,
-      new THREE.PointsMaterial({ color: FOAM_COLOR, size: 0.35, sizeAttenuation: true, transparent: true, opacity: 0.8 }),
+      new THREE.PointsMaterial({ color: FOAM_COLOR, size: 0.5, sizeAttenuation: true, transparent: true, opacity: 0.8 }),
     );
     this.scene.add(this.foam);
 
@@ -602,6 +605,9 @@ export class AmaFlowScene {
     arrow.position.set(threeX, height + HEADING_ARROW_HEIGHT_M, threeZ);
     arrow.setDirection(new THREE.Vector3(Math.cos(psi), 0, -Math.sin(psi))); // sim +y/port -> world -z
     this.lastPsi[which] = psi;
+
+    const [currentVx, currentVy] = currentVelocity(this.conditions);
+    this.wakes[which].update(threeX, threeZ, psi, elapsedSeconds, [currentVx, -currentVy], this.waves); // sim +y -> world -z
   }
 
   /** Point that boat's dashed tracker line at its current course waypoint, given in ama-flow's
@@ -632,6 +638,8 @@ export class AmaFlowScene {
     this.oceanMaterial.uniforms.uDirection0.value.set(...this.waves[0].direction);
     this.oceanMaterial.uniforms.uDirection1.value.set(...this.waves[1].direction);
     this.oceanMaterial.uniforms.uDirection2.value.set(...this.waves[2].direction);
+    this.wakes.player.clear(); // a new race starts from the origin, so the old trails are meaningless
+    this.wakes.opponent.clear();
   }
 
   /** The sim-frame heading (ama-flow's CCW-from-+x convention) that currently points "up" on
@@ -735,10 +743,10 @@ export class AmaFlowScene {
     this.ocean.position.set(this.cameraPosition.x, 0, this.cameraPosition.z);
     this.oceanMaterial.uniforms.uWorldOffset.value.set(this.ocean.position.x, this.ocean.position.z);
 
-    // Drift the foam patch by the current's displacement since t=0 (velocity is constant, so
-    // this is just velocity * time, no need to track a per-frame delta), wrap each fleck back
-    // into the patch once it drifts past FOAM_RADIUS_M, and recenter the whole patch under the
-    // camera -- the same "infinite ocean" trick setBoatState/the ocean mesh use.
+    // Each fleck is fixed in the WORLD, drifting only with the current (velocity is constant, so
+    // this is just velocity * time), so as the camera follows a boat the flecks stream past it --
+    // that is what shows the boat moving. Only the wrap is relative to the camera: a fleck that
+    // falls outside the patch around the camera reappears on the opposite side.
     const [currentVx, currentVy] = currentVelocity(this.conditions);
     const driftX = currentVx * elapsedSeconds;
     const driftZ = -currentVy * elapsedSeconds; // sim +y -> world -z
@@ -746,10 +754,8 @@ export class AmaFlowScene {
     const wrap = (v: number) => (((v % twoR) + twoR + FOAM_RADIUS_M) % twoR) - FOAM_RADIUS_M;
     const positions = this.foam.geometry.attributes.position as THREE.BufferAttribute;
     for (let i = 0; i < FOAM_COUNT; i++) {
-      const localX = wrap(this.foamBaseXZ[i * 2] - driftX);
-      const localZ = wrap(this.foamBaseXZ[i * 2 + 1] - driftZ);
-      const x = localX + this.cameraPosition.x;
-      const z = localZ + this.cameraPosition.z;
+      const x = this.cameraPosition.x + wrap(this.foamBaseXZ[i * 2] - driftX - this.cameraPosition.x);
+      const z = this.cameraPosition.z + wrap(this.foamBaseXZ[i * 2 + 1] - driftZ - this.cameraPosition.z);
       positions.setXYZ(i, x, waveHeight(this.waves, x, z, elapsedSeconds) + 0.05, z);
     }
     positions.needsUpdate = true;
