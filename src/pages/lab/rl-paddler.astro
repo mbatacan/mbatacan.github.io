@@ -46,19 +46,16 @@ function curvePoints(points: [number, number][], totalSteps: number): { line: st
 
 <BaseLayout
   title="Race an RL Paddler — Matthew Batacan"
-  description="Race or watch PPO-trained outrigger canoe steersmen in 3D, switch between several trained checkpoints, and see the settings and results behind each -- all running entirely in your browser."
+  description="Race an RL agent that steers an outrigger canoe, or watch it against a hand-coded baseline."
   wide
 >
   <SiteHeader />
 
   <div class="af-intro">
     <p>
-      A reinforcement-learning agent trained to hold a heading in cross-wind and cross-current --
-      the physics, training and evaluation are all in
-      {' '}<a href="https://github.com/mbatacan/ama-flow" target="_blank" rel="noopener">ama-flow</a>,
-      a separate repo. This page is a from-scratch TypeScript port of that physics core and a
-      tiny re-implementation of each trained policy's neural net, checked against the Python
-      original stroke by stroke. Pick a checkpoint below to swap the model. Nothing is sent anywhere; everything below runs in your browser.
+      A reinforcement-learning agent trained to hold a heading in cross-wind and cross-current while
+      steering an outrigger canoe. Race it, or watch it against a hand-coded baseline. The physics and
+      training are in{' '}<a href="https://github.com/mbatacan/ama-flow" target="_blank" rel="noopener">ama-flow</a>.
     </p>
     <p id="af-legend-watch" class="af-legend">
       <strong class="af-blue">blue</strong> is the selected trained model &middot;
@@ -158,7 +155,7 @@ function curvePoints(points: [number, number][], totalSteps: number): { line: st
           <li><kbd>&rarr;</kbd> paddle starboard</li>
           <li><kbd>1</kbd> forward &middot; <kbd>2</kbd> draw &middot; <kbd>3</kbd> poke &middot; <kbd>4</kbd> rudder</li>
         </ul>
-        <p class="af-hint">Your current selection fires automatically every stroke -- there's no separate "paddle" key. It's also highlighted at the bottom of the view, so you don't have to look away.</p>
+        <p class="af-hint">Your selection fires automatically every stroke, so there's no paddle key. It's highlighted at the bottom of the view.</p>
         <p class="af-hint">The green compass arrow points where to steer; wind and current show the same way. The small map in the corner shows the whole course.</p>
       </div>
       <div class="af-hud">

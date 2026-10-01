@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Static personal portfolio/blog site built with [Astro](https://astro.build) and hosted on GitHub Pages. Dark navy theme (`#161b33`), monospace (Courier Prime) font, no JavaScript framework.
 
-**This is a static site with no server.** Anything that needs a backend or a secret (a database, a hosted-LLM API call with your own key, etc.) doesn't belong here — it would either not work at all on GitHub Pages, or leak the secret into the public bundle. The `/lab` demos run entirely client-side for this reason: `fool-the-classifier` fetches its ONNX weights from a public CDN, and `rl-paddler` bundles small trained policies' weights directly (`src/data/ama-flow/policies/<id>.json`) plus a from-scratch TypeScript port of the physics they run on — both do inference in the visitor's browser, nothing is sent anywhere.
+**This is a static site with no server.** Anything that needs a backend or a secret (a database, a hosted-LLM API call with your own key, etc.) doesn't belong here — it would either not work at all on GitHub Pages, or leak the secret into the public bundle. The `/lab` demos run entirely client-side for this reason: `fool-the-classifier` fetches its ONNX weights from a public CDN, and `rl-paddler` bundles small trained policies' weights directly (`src/data/ama-flow/policies/<id>.json`) plus a from-scratch TypeScript port of the physics they run on.
 
 ## Commands
 

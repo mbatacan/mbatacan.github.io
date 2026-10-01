@@ -8,7 +8,7 @@ export interface LabProject {
 export const LAB_PROJECTS: LabProject[] = [
   {
     title: 'Fool the Classifier',
-    description: 'Draw something and watch a real neural net guess it live, right in your browser.',
+    description: 'Draw something and see if a neural net can guess it.',
     status: 'completed',
     href: '/lab/fool-the-classifier',
   },
@@ -20,8 +20,7 @@ export const LAB_PROJECTS: LabProject[] = [
   },
   {
     title: 'Race an RL Paddler',
-    description:
-      'A 3D outrigger canoe race against PPO policies trained offline in a separate repo (ama-flow) and shipped as small in-browser models. Switch between several checkpoints, see the settings and results behind each, or watch one duel a hand-coded baseline.',
+    description: 'An RL agent that steers an outrigger canoe.',
     status: 'completed',
     href: '/lab/rl-paddler',
   },
