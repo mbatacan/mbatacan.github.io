@@ -16,11 +16,9 @@ export interface Prediction {
   prob: number;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// onnxruntime-web is imported from a CDN URL at runtime, so it has no static types.
 let ortModule: any = null;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let session: any = null;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let loadingPromise: Promise<any> | null = null;
 
 /** Download the model, serving it from Cache Storage on repeat visits instead of re-fetching. */
@@ -60,7 +58,6 @@ async function fetchCachedModel(
  * Load onnxruntime-web and the QuickDraw model. Safe to call more than once — the first call's
  * in-flight promise is reused, and the resulting session is cached for classify().
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function loadSession(onProgress?: (loaded: number, total: number) => void): Promise<any> {
   if (!loadingPromise) {
     loadingPromise = (async () => {

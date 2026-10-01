@@ -3,6 +3,9 @@
 // never runs during Astro's static build. Waves are cosmetic (see ../../lib/ama-flow/waves.ts);
 // nothing here feeds back into the physics.
 import * as THREE from 'three';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
+import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
+import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
 import { Sky } from 'three/examples/jsm/objects/Sky.js';
 import { canoeOutlines, HULL_LENGTH_M } from '../../lib/ama-flow/canoe-geometry';
 import { FINISH_GATE_HALF_WIDTH_M } from './game';
@@ -17,14 +20,15 @@ interface CrewFigure {
   group: THREE.Group;
   paddle: THREE.Group;
   torso: THREE.Mesh;
+  head: THREE.Mesh;
 }
 
 interface BoatVisual {
   group: THREE.Group;
-  paddle: THREE.Group; // the steersman's paddle -- the only crew member the game controls
+  steersman: CrewFigure; // the only crew member the game controls (seat 6, stern)
   crew: CrewFigure[]; // seats 1-5 (bow to just-forward-of-steersman), animated by setCrewStroke
   headingArrow: THREE.ArrowHelper; // scene-level, kept level regardless of hull pitch/roll
-  trackerLine: THREE.Line; // scene-level dashed line to the boat's current course waypoint
+  tracker: TrackerLine; // scene-level dashed line to the boat's current course waypoint
 }
 
 // Body-frame x of each seat, stern (steersman, seat 6) to bow (seat 1) -- mirrors the "steersman
@@ -47,6 +51,7 @@ const OCEAN_SEGMENTS = 140;
 const HULL_COLORS: Record<BoatId, number> = { player: 0x8b8bff, opponent: 0xe05a5a };
 const AMA_COLOR = 0xd2b48c;
 const IAKO_COLOR = 0x8c8c8c;
+const IAKO_BASE_Y_M = 0.26;
 // Both boats run identical physics from (0, 0), so without this they'd render exactly on top of
 // each other. This offset is visual only -- applied to the mesh, never to the simulated state.
 const BOAT_LANE_OFFSET_M: Record<BoatId, number> = { player: 5, opponent: -5 };
@@ -56,6 +61,14 @@ const FINISH_LINE_HALF_WIDTH_M = FINISH_GATE_HALF_WIDTH_M;
 const FINISH_BUOY_HEIGHT_M = 3;
 const TURN_BUOY_HEIGHT_M = 3;
 const TRACKER_LINE_HEIGHT_M = 1; // above the water, so the dashed tracker doesn't clip into swell
+const TRACKER_DASH_M = 3;
+const TRACKER_GAP_M = 2;
+const MAX_TRACKER_DASHES = 120; // 120 * 5 m = 600 m, well past any leg of the course
+const TRACKER_WIDTH_PX = 4;
+const TRACKER_OUTLINE_WIDTH_PX = 8;
+const TRACKER_OUTLINE_COLOR = 0x0b1030; // dark, so the line reads against both light and dark water
+// Lighter than the hull colors: the line sits on teal water, where the hull blue/red are dim.
+const TRACKER_COLORS: Record<BoatId, number> = { player: 0xb8b8ff, opponent: 0xff8a8a };
 const HEADING_ARROW_LENGTH_M = 12;
 const HEADING_ARROW_HEIGHT_M = 1.5; // above the hull, so it clears the swell and reads from above
 const CHASE_BACK_DISTANCE_M = HULL_LENGTH_M * 1.0;
@@ -114,51 +127,101 @@ function shapeFromOutline(points: [number, number][]): THREE.Shape {
   return shape;
 }
 
+/** Share of a forward-stroke cycle spent pulling (the drive); the rest is recovery. Real paddle
+ * strokes spend well under half the cycle pulling -- most of it is the blade swinging back out
+ * front, which is what makes the reach read as a reach.
+ */
+const DRIVE_FRACTION = 0.4;
+
 /** A basic OC6 stroke, forward/draw/poke/rudder in the physics but rendered the same way for
  * every crew seat (only the steersman's actual stroke type is known -- seats 1-5 are always
  * assumed to paddle forward). Real outrigger crews paddle around 50 strokes per minute; the
- * page drives `phase` at that rate (see rl-paddler.astro's STROKE_PERIOD_S).
+ * page drives `phase` at that rate (see STROKE_PERIOD_S in page.ts).
  *
  * Returns `sweep` (-1 at the catch, forward in the water, to +1 at the exit, aft) and `lift`
- * (0 = blade buried, 1 = fully clear of the water during recovery), both continuous across the
- * phase 1 -> 0 wrap so consecutive strokes blend smoothly.
+ * (0 = blade buried, 1 = fully clear of the water during recovery). Both are continuous across
+ * the phase 1 -> 0 wrap, and sweep eases in and out of each extreme so the blade doesn't snap
+ * between the drive and the recovery.
  */
 export function forwardStrokePose(phase: number): { sweep: number; lift: number } {
   const p = ((phase % 1) + 1) % 1;
-  if (p < 0.55) {
-    // Drive: blade planted, sweeping from the catch (forward) to the exit (aft).
-    const t = p / 0.55;
-    return { sweep: -1 + 2 * t, lift: 0 };
+  if (p < DRIVE_FRACTION) {
+    // Drive: blade planted, pulled from the catch (forward) to the exit (aft).
+    const t = p / DRIVE_FRACTION;
+    return { sweep: -Math.cos(Math.PI * t), lift: 0 };
   }
-  // Recovery: blade lifts clear, swings forward, and re-enters just as phase wraps to 0.
-  const t = (p - 0.55) / 0.45;
-  const lift = Math.sin(t * Math.PI); // 0 at exit and catch, peak mid-recovery
-  return { sweep: 1 - 2 * t, lift };
+  // Recovery: blade lifts clear and swings forward, re-entering at the catch as phase wraps to 0.
+  const t = (p - DRIVE_FRACTION) / (1 - DRIVE_FRACTION);
+  return { sweep: Math.cos(Math.PI * t), lift: Math.sin(Math.PI * t) };
 }
 
-/** Poses a paddle (and optionally its figure's torso) from a stroke's side and its
- * forwardStrokePose()-shaped sweep/lift, shared by every crew seat and the steersman's forward
- * stroke. `side` is 0 (port) or 1 (starboard); port swings the blade to local -Z, matching the
- * ama's port rigging.
+// Paddler geometry, in a figure's own frame: origin at the hip/seat, +x forward, +y up, -z port.
+const SHAFT_HALF_LENGTH_M = 0.7; // buildPaddleMesh's shaft is 1.4 m, centered on the paddle group
+export const BLADE_CENTER_OFFSET_M = -0.9; // blade center below the paddle group's origin
+const TOP_HAND_TO_BLADE_M = SHAFT_HALF_LENGTH_M - BLADE_CENTER_OFFSET_M;
+const TORSO_CENTER_M = 0.35; // torso capsule center above the hip
+const HEAD_CENTER_M = 0.75;
+const BLADE_PLANTED_Y_M = -0.75; // blade center height while pulling: half under the surface
+const BLADE_RECOVERY_LIFT_M = 0.45; // how far the blade rises at mid-recovery
+const SHAFT_SWING_RAD = 0.42; // shaft angle from vertical at the catch (forward) and exit (aft)
+const SHAFT_CANT_RAD = 0.19; // the blade sits outboard of the top hand, as on a real paddle
+const TORSO_PITCH_CATCH_RAD = 0.4; // leaning forward into the reach
+const TORSO_PITCH_EXIT_RAD = -0.1; // finishing slightly upright/back
+const TOP_HAND_AHEAD_OF_HEAD_M = 0.15;
+const TOP_HAND_LATERAL_M = 0.25; // top hand's distance from the centerline
+
+export interface PaddlePose {
+  /** Where to put the paddle group, in the figure frame. */
+  position: THREE.Vector3;
+  rotation: THREE.Euler;
+  /** Forward lean of the torso about the hip, in radians (positive = toward +x). */
+  torsoPitch: number;
+}
+
+/** The paddle and body pose for one moment of a forward stroke, from forwardStrokePose()'s
+ * sweep (-1 catch .. +1 exit) and lift. `side` is 0 (port) or 1 (starboard); port is local -Z,
+ * matching the ama's port rigging.
+ *
+ * The paddle swings about the top hand, not the middle of the shaft, so the shaft angle sweeps
+ * the blade through an arc. The top hand rides with the leaning torso (forward at the catch),
+ * and its height is set so the blade stays at a constant depth through the drive and rises
+ * clear of the water only during recovery.
  */
-function applyPaddlePose(
-  paddle: THREE.Group,
-  torso: THREE.Mesh | null,
-  side: number,
-  sweep: number,
-  lift: number,
-): void {
+export function paddlePose(side: number, sweep: number, lift: number): PaddlePose {
   const sideSign = side === 0 ? -1 : 1;
-  paddle.position.set(sweep * 0.35, 0.65 + lift * 0.35, sideSign * (0.55 + 0.1 * lift));
-  // The paddle's default cylinder axis is local Y (vertical). Rotating about local X tips Y
-  // toward Z (lateral -- out to the paddling side); rotating about local Z tips Y toward X
-  // (fore-aft -- the stroke's sweep). These were swapped before, which made every paddle point
-  // forward along the hull instead of out to the side into the water. The lateral tip is a
-  // shallow cant (~10 deg), not a hard lean -- a real paddle is held close to vertical, angled
-  // only slightly outward from the top hand to the blade in the water.
-  paddle.rotation.x = sideSign * 0.18;
-  paddle.rotation.z = -sweep * 0.3;
-  if (torso) torso.rotation.x = -sweep * 0.12; // slight forward lean at the catch
+  const torsoPitch =
+    (TORSO_PITCH_CATCH_RAD + TORSO_PITCH_EXIT_RAD) / 2 -
+    ((TORSO_PITCH_CATCH_RAD - TORSO_PITCH_EXIT_RAD) / 2) * sweep;
+  // Positive shaft pitch puts the blade ahead of the hand (rotation about local Z tips the
+  // shaft's bottom toward +x); the cant about X tips the blade outward to the paddling side.
+  const shaftPitch = -SHAFT_SWING_RAD * sweep;
+  const rotation = new THREE.Euler(-sideSign * SHAFT_CANT_RAD, 0, shaftPitch);
+
+  const bladeY = BLADE_PLANTED_Y_M + BLADE_RECOVERY_LIFT_M * lift;
+  const hand = new THREE.Vector3(
+    HEAD_CENTER_M * Math.sin(torsoPitch) + TOP_HAND_AHEAD_OF_HEAD_M,
+    bladeY + TOP_HAND_TO_BLADE_M * Math.cos(shaftPitch) * Math.cos(SHAFT_CANT_RAD),
+    sideSign * TOP_HAND_LATERAL_M,
+  );
+  // The group's origin is the middle of the shaft, so back off from the hand by the rotated
+  // half-shaft to put the shaft's top end exactly on the hand.
+  const topOffset = new THREE.Vector3(0, SHAFT_HALF_LENGTH_M, 0).applyEuler(rotation);
+  return { position: hand.sub(topOffset), rotation, torsoPitch };
+}
+
+/** Leans a figure's torso and head forward by `pitch` radians about the hip (the figure's origin). */
+function poseTorso({ torso, head }: CrewFigure, pitch: number): void {
+  torso.rotation.z = -pitch; // rotation about +Z tips +Y toward -X, so a forward lean is negative
+  torso.position.set(TORSO_CENTER_M * Math.sin(pitch), TORSO_CENTER_M * Math.cos(pitch), 0);
+  head.position.set(HEAD_CENTER_M * Math.sin(pitch), HEAD_CENTER_M * Math.cos(pitch), 0);
+}
+
+/** Poses a figure's paddle and body for a forward stroke at the given sweep/lift. */
+function applyForwardStroke(figure: CrewFigure, side: number, sweep: number, lift: number): void {
+  const { position, rotation, torsoPitch } = paddlePose(side, sweep, lift);
+  figure.paddle.position.copy(position);
+  figure.paddle.rotation.copy(rotation);
+  poseTorso(figure, torsoPitch);
 }
 
 /** One paddler: a capsule torso, sphere head, and a small paddle, bright enough to read clearly
@@ -180,7 +243,7 @@ function buildCrewFigure(): CrewFigure {
   const paddle = buildPaddleMesh(PADDLE_COLORS.forward);
   paddle.position.y = 0.65;
   group.add(torso, head, paddle);
-  return { group, paddle, torso };
+  return { group, paddle, torso, head };
 }
 
 /** A paddle shaft plus blade, colored by stroke type. Shared by the steersman's paddle and
@@ -203,12 +266,79 @@ function buildPaddleMesh(color: number): THREE.Group {
   return paddle;
 }
 
+/** The [start, end] distances along a line of `length` metres for each dash, starting with a
+ * dash at 0. The last dash is cut short at the end of the line, and at most `maxDashes` are
+ * returned.
+ */
+export function dashSpans(
+  length: number,
+  dashM: number,
+  gapM: number,
+  maxDashes: number,
+): [number, number][] {
+  const spans: [number, number][] = [];
+  for (let start = 0; start < length && spans.length < maxDashes; start += dashM + gapM) {
+    spans.push([start, Math.min(start + dashM, length)]);
+  }
+  return spans;
+}
+
+/** A dashed line from a boat to its current waypoint, thick enough to read from the chase camera.
+ * WebGL lines are always one pixel wide, so this uses three's screen-space LineSegments2 with each
+ * dash as its own segment, rewritten in place every frame (no allocation). A wider, dark copy under
+ * the colored one outlines it, so it stands out on any water color.
+ */
+class TrackerLine {
+  readonly objects: LineSegments2[];
+  private readonly positions = new Float32Array(MAX_TRACKER_DASHES * 6);
+  private readonly geometry = new LineSegmentsGeometry();
+  private readonly materials: LineMaterial[];
+  private readonly direction = new THREE.Vector3();
+
+  constructor(color: number) {
+    this.geometry.setPositions(this.positions); // uses the array as-is, so set() can write into it
+    this.materials = [
+      new LineMaterial({ color: TRACKER_OUTLINE_COLOR, linewidth: TRACKER_OUTLINE_WIDTH_PX, toneMapped: false }),
+      new LineMaterial({ color, linewidth: TRACKER_WIDTH_PX, toneMapped: false }),
+    ];
+    this.objects = this.materials.map((material, i) => {
+      const line = new LineSegments2(this.geometry, material);
+      line.frustumCulled = false; // the bounds were computed from the empty initial positions
+      line.renderOrder = i + 1; // outline first, colored line on top
+      return line;
+    });
+  }
+
+  /** Lay the dashes along the line from `start` to `end`. */
+  set(start: THREE.Vector3, end: THREE.Vector3): void {
+    const length = start.distanceTo(end);
+    this.direction.subVectors(end, start).normalize();
+    const spans = dashSpans(length, TRACKER_DASH_M, TRACKER_GAP_M, MAX_TRACKER_DASHES);
+    spans.forEach(([from, to], i) => {
+      const o = i * 6;
+      this.positions[o] = start.x + this.direction.x * from;
+      this.positions[o + 1] = start.y + this.direction.y * from;
+      this.positions[o + 2] = start.z + this.direction.z * from;
+      this.positions[o + 3] = start.x + this.direction.x * to;
+      this.positions[o + 4] = start.y + this.direction.y * to;
+      this.positions[o + 5] = start.z + this.direction.z * to;
+    });
+    (this.geometry.attributes.instanceStart as THREE.InterleavedBufferAttribute).data.needsUpdate = true;
+    this.geometry.instanceCount = spans.length;
+  }
+
+  /** Line widths are in pixels, so the materials need the canvas size. */
+  setResolution(width: number, height: number): void {
+    this.materials.forEach((material) => material.resolution.set(width, height));
+  }
+}
+
 /** A low-poly OC6 glyph: hull, ama, two iako, six paddlers, and the steersman's paddle, laid on
  * the water plane. Body-frame +x is forward; the mesh is built in the X-Z plane (Y up) so a
  * Y-axis rotation by heading psi orients it exactly as ama_flow's own top-down glyph would (sim
  * +y/port -> -Z). The ama is rigged to port, as on a real OC6.
  */
-function buildCanoeMesh(hullColor: number): BoatVisual {
+function buildCanoeMesh(hullColor: number, trackerColor: number): BoatVisual {
   const outlines = canoeOutlines();
   const group = new THREE.Group();
 
@@ -226,8 +356,10 @@ function buildCanoeMesh(hullColor: number): BoatVisual {
 
   addPart(outlines.hull, hullColor, 0.5, 0);
   addPart(outlines.ama, AMA_COLOR, 0.25, 0.05);
-  addPart(outlines.forwardIako, IAKO_COLOR, 0.08, 0.35);
-  addPart(outlines.aftIako, IAKO_COLOR, 0.08, 0.35);
+  // The beams sit just low enough to overlap the ama's top face (0.05 + 0.25), so they visibly land
+  // on the float instead of hovering above it; the hull is tall enough (0.5) to swallow their inner end.
+  addPart(outlines.forwardIako, IAKO_COLOR, 0.08, IAKO_BASE_Y_M);
+  addPart(outlines.aftIako, IAKO_COLOR, 0.08, IAKO_BASE_Y_M);
 
   const seatFigures = SEAT_X_POSITIONS.map((x) => {
     const figure = buildCrewFigure();
@@ -252,17 +384,10 @@ function buildCanoeMesh(hullColor: number): BoatVisual {
     HEADING_ARROW_LENGTH_M * 0.18,
   );
 
-  // A dashed line to the boat's current course waypoint (see setTrackerTarget). Positions are
-  // placeholders, rewritten every frame; computeLineDistances() must be called again each time
-  // those positions change, or LineDashedMaterial's dash pattern stops updating.
-  const trackerGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]);
-  const trackerLine = new THREE.Line(
-    trackerGeometry,
-    new THREE.LineDashedMaterial({ color: hullColor, dashSize: 3, gapSize: 2, transparent: true, opacity: 0.6 }),
-  );
-  trackerLine.computeLineDistances();
+  // A dashed line to the boat's current course waypoint, rewritten every frame (see setTrackerTarget).
+  const tracker = new TrackerLine(trackerColor);
 
-  return { group, paddle: steersman.paddle, crew, headingArrow, trackerLine };
+  return { group, steersman, crew, headingArrow, tracker };
 }
 
 const OCEAN_VERTEX_SHADER = /* glsl */ `
@@ -343,6 +468,8 @@ export class AmaFlowScene {
   private waves: WaveComponent[];
   private conditions: Conditions;
   private boats: Record<BoatId, BoatVisual>;
+  private trackerStart = new THREE.Vector3(); // scratch vectors for setTrackerTarget
+  private trackerEnd = new THREE.Vector3();
   private lastPsi: Record<BoatId, number> = { player: 0, opponent: 0 };
   private cameraMode: CameraMode = 'chase';
   private cameraTarget = new THREE.Vector3();
@@ -407,12 +534,12 @@ export class AmaFlowScene {
     this.scene.add(this.ocean);
 
     this.boats = {
-      player: buildCanoeMesh(HULL_COLORS.player),
-      opponent: buildCanoeMesh(HULL_COLORS.opponent),
+      player: buildCanoeMesh(HULL_COLORS.player, TRACKER_COLORS.player),
+      opponent: buildCanoeMesh(HULL_COLORS.opponent, TRACKER_COLORS.opponent),
     };
     this.scene.add(this.boats.player.group, this.boats.opponent.group);
     this.scene.add(this.boats.player.headingArrow, this.boats.opponent.headingArrow);
-    this.scene.add(this.boats.player.trackerLine, this.boats.opponent.trackerLine);
+    this.scene.add(...this.boats.player.tracker.objects, ...this.boats.opponent.tracker.objects);
 
     // A turn buoy at every waypoint except the last, and a two-buoy finish gate at the last,
     // each oriented to face the approach from the previous waypoint (or the start, for the
@@ -479,12 +606,10 @@ export class AmaFlowScene {
    */
   setTrackerTarget(which: BoatId, waypointX: number, waypointY: number): void {
     const boatPosition = this.boats[which].group.position;
-    const line = this.boats[which].trackerLine;
-    const positions = line.geometry.attributes.position as THREE.BufferAttribute;
-    positions.setXYZ(0, boatPosition.x, boatPosition.y + TRACKER_LINE_HEIGHT_M, boatPosition.z);
-    positions.setXYZ(1, waypointX, boatPosition.y + TRACKER_LINE_HEIGHT_M, -waypointY);
-    positions.needsUpdate = true;
-    line.computeLineDistances(); // required every time positions change, or dashes freeze
+    const y = boatPosition.y + TRACKER_LINE_HEIGHT_M;
+    this.trackerStart.set(boatPosition.x, y, boatPosition.z);
+    this.trackerEnd.set(waypointX, y, -waypointY);
+    this.boats[which].tracker.set(this.trackerStart, this.trackerEnd);
   }
 
   /** Update wind/current for a new race (conditions are randomized per race -- see game.ts's
@@ -517,7 +642,7 @@ export class AmaFlowScene {
     const { sweep, lift } = forwardStrokePose(phase);
     this.boats[which].crew.forEach((figure, seat) => {
       const side = seatSide(PRESETS.crew, seat, strokeIndex);
-      applyPaddlePose(figure.paddle, figure.torso, side, sweep, lift);
+      applyForwardStroke(figure, side, sweep, lift);
     });
   }
 
@@ -527,18 +652,20 @@ export class AmaFlowScene {
    * with the real stroke type rather than always-forward.
    */
   setStroke(which: BoatId, side: number, strokeType: number, phase: number): void {
-    const paddle = this.boats[which].paddle;
+    const figure = this.boats[which].steersman;
+    const paddle = figure.paddle;
     const key = STROKE_TYPE_KEYS[strokeType] ?? 'forward';
     if (key === 'forward') {
       const { sweep, lift } = forwardStrokePose(phase);
-      applyPaddlePose(paddle, null, side, sweep, lift);
+      applyForwardStroke(figure, side, sweep, lift);
     } else {
+      poseTorso(figure, 0); // no reach for these strokes; undo any lean left by a forward stroke
       // Draw/poke/rudder don't have a drive/recovery cycle in the physics -- just show the
       // blade planted on the working side with a small flourish through the stroke.
       const sideSign = side === 0 ? -1 : 1; // port -> local -Z, starboard -> local +Z
       const swing = Math.sin(Math.min(phase, 1) * Math.PI); // 0 at start/end, peak mid-stroke
       paddle.position.set(0, 0.65, sideSign * (0.55 + 0.15 * swing));
-      paddle.rotation.x = sideSign * 0.18; // a shallow cant, not a hard lean (see applyPaddlePose)
+      paddle.rotation.x = -sideSign * SHAFT_CANT_RAD; // blade outboard of the hand, as in paddlePose
       paddle.rotation.z = -0.3 + 0.5 * swing;
     }
 
@@ -627,6 +754,8 @@ export class AmaFlowScene {
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
+    this.boats.player.tracker.setResolution(width, height);
+    this.boats.opponent.tracker.setResolution(width, height);
   }
 
   dispose(): void {
