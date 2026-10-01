@@ -223,17 +223,61 @@ footer {
   line-height: 1.7;
 }
 
-.photo-grid {
+.home-schools {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
-  align-items: center;
-  justify-content: center;
+  gap: 20px 32px;
+  margin: 20px 0;
 }
 
-.photo-grid img {
-  height: 50px;
+.home-school {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.home-school img {
+  height: 44px;
+  width: 44px;
   object-fit: contain;
+}
+
+.home-work {
+  margin-top: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.25);
+  padding-top: 12px;
+}
+
+.home-work > summary {
+  cursor: pointer;
+}
+
+.home-jobs {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  line-height: 1.6;
+  font-size: 0.95rem;
+}
+
+.home-jobs li {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.home-jobs .no-logo {
+  padding-left: 50px; /* lines the text up with the entries that have a 36px logo and a 14px gap */
+}
+
+.home-jobs img {
+  height: 36px;
+  width: 36px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 /* ── Lab: Fool the Classifier ───────────────────── */

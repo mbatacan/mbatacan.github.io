@@ -13,31 +13,48 @@ import Footer from '../components/Footer.astro';
   <SiteNav />
 
   <div class="about-bio">
+    <p>I grew up in Honolulu, Hawaii.</p>
+  </div>
+
+  <div class="home-schools">
+    <div class="home-school">
+      <img src="/assets/icons/iolani-logo.png" alt="" />
+      <span>Iolani School</span>
+    </div>
+    <div class="home-school">
+      <img src="/assets/icons/bu-logo.jpeg" alt="" />
+      <span>Boston University, Data Science</span>
+    </div>
+  </div>
+
+  <div class="about-bio">
     <p>
-      I grew up in Honolulu, Hawaii and attended Iolani School. I graduated from
-      Boston University with a degree in Data Science.
-    </p>
-    <p>
-      During undergrad I served as a Technical Project Manager at{' '}
-      <a href="https://www.bu.edu/spark/" target="_blank" rel="noopener">BU Spark!</a>,
-      BU's applied research lab, where I led student data science teams embedded with
-      journalism partners for the Justice Media Co-lab.
-    </p>
-    <p>
-      I interned at IBM as a data scientist working on the ibm.com search engine, and
-      have also worked with a healthcare startup and as a data science tutor.
-    </p>
-    <p>
-      I currently work on sensor data insights, alerting, and prognostics at Boeing.
+      I'm interested in data science, machine learning, time series analysis, reinforcement
+      learning, deep learning, and MLOps.
     </p>
   </div>
 
-  <div class="photo-grid">
-    <img src="/assets/icons/iolani-logo.png" alt="Iolani School" />
-    <img src="/assets/icons/bu-logo.jpeg" alt="Boston University" />
-    <img src="/assets/icons/bu-spark.png" alt="BU Spark!" />
-    <img src="/assets/icons/ibm-reebus.png" alt="IBM" />
-  </div>
+  <details class="home-work">
+    <summary>Work experience</summary>
+    <ul class="home-jobs">
+      <li class="no-logo">
+        <span><strong>Boeing</strong>, currently. Sensor data insights, alerting, and prognostics.</span>
+      </li>
+      <li>
+        <img src="/assets/icons/bu-spark.png" alt="" />
+        <span>
+          <strong><a href="https://www.bu.edu/spark/" target="_blank" rel="noopener">BU Spark!</a></strong>,
+          Technical Project Manager. Led student data science teams embedded with journalism
+          partners for the Justice Media Co-lab.
+        </span>
+      </li>
+      <li>
+        <img src="/assets/icons/ibm-reebus.png" alt="" />
+        <span><strong>IBM</strong>, data science intern on the ibm.com search engine.</span>
+      </li>
+      <li class="no-logo"><span>Also a healthcare startup and a data science tutor.</span></li>
+    </ul>
+  </details>
 
   <Footer />
 </BaseLayout>
