@@ -52,6 +52,17 @@ export const LAB_PROJECTS: LabProject[] = [
   {
     title: 'Fantasy Football Modeler',
     description: 'General sports analytics and modeling for fantasy football.',
-    status: 'idea',
+    status: 'in-progress',
+  },
+  {
+   title: 'Moshimoshi',
+   description: 'Daily language practice with daily diary entry, reading, and corrections.',
+   status: 'in-progress',
+  },
+  {
+   title: 'cornerstone',
+   description: 'data science and ml template repo', 
+   status: 'completed',
+   href: 'https://github.com/mbatacan/cornerstone'
   },
 ];
