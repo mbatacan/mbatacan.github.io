@@ -26,8 +26,9 @@ export const LAB_PROJECTS: LabProject[] = [
   },
   {
     title: 'KAI',
-    description: 'An AI agent for working through Kaggle competitions.',
-    status: 'in-progress',
+    description: 'A multi-agent system that works through Kaggle competitions end to end.',
+    status: 'completed',
+    href: '/lab/kai',
   },
   {
     title: 'open-edge',
