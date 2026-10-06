@@ -407,6 +407,122 @@ footer {
   text-align: right;
 }
 
+/* ── Lab: KAI ───────────────────────────────────── */
+.kai-diagram,
+.kai-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.kai-node {
+  fill: none;
+  stroke: white;
+  stroke-width: 1.5;
+}
+
+.kai-node-label {
+  fill: white;
+  font-size: 14px;
+}
+
+.kai-node-tag {
+  fill: white;
+  opacity: 0.7;
+  font-size: 12px;
+}
+
+.kai-node--claude {
+  stroke: #8b8bff;
+}
+
+.kai-node--ollama {
+  stroke: #e0b05a;
+}
+
+.kai-container {
+  fill: none;
+  stroke: white;
+  stroke-opacity: 0.45;
+  stroke-dasharray: 4 4;
+}
+
+.kai-edge {
+  stroke: white;
+  stroke-width: 1.5;
+}
+
+.kai-edge--dashed {
+  stroke-dasharray: 4 4;
+}
+
+.kai-edge-label {
+  fill: white;
+  opacity: 0.7;
+  font-size: 11px;
+}
+
+.kai-grid {
+  stroke: rgba(255, 255, 255, 0.15);
+}
+
+.kai-goal {
+  stroke: rgba(255, 255, 255, 0.6);
+  stroke-dasharray: 5 4;
+}
+
+.kai-axis {
+  fill: white;
+  opacity: 0.7;
+  font-size: 11px;
+}
+
+.kai-line-label {
+  font-size: 12px;
+}
+
+.kai-table {
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  width: 100%;
+  line-height: 1.5;
+}
+
+.kai-table th,
+.kai-table td {
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.kai-table th {
+  opacity: 0.7;
+  font-weight: normal;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.kai-table--num td:nth-child(3),
+.kai-table--num td:nth-child(4),
+.kai-table--num td:nth-child(5) {
+  white-space: nowrap;
+}
+
+.kai-note {
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+
+@media (max-width: 500px) {
+  .kai {
+    overflow-x: hidden;
+  }
+
+  .kai-table {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
 /* ── Lab: Race an RL Paddler ─────────────────────── */
 .af-intro {
   display: flex;
