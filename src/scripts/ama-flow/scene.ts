@@ -1,4 +1,4 @@
-// The 3D scene: ocean swell, sky, two procedural OC6 canoes, and a chase/top-down camera.
+// The 3D scene: ocean swell, sky, islands, two procedural OC6 canoes, and a chase/top-down camera.
 // Browser-only (imports three and touches the DOM), loaded dynamically by the lab page so it
 // never runs during Astro's static build. Waves are cosmetic (see ../../lib/ama-flow/waves.ts);
 // nothing here feeds back into the physics.
@@ -6,8 +6,14 @@ import * as THREE from 'three';
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/examples/jsm/lines/LineSegments2.js';
 import { LineSegmentsGeometry } from 'three/examples/jsm/lines/LineSegmentsGeometry.js';
-import { Sky } from 'three/examples/jsm/objects/Sky.js';
-import { canoeOutlines, HULL_LENGTH_M } from '../../lib/ama-flow/canoe-geometry';
+import {
+  AMA_BEAM_M,
+  AMA_LENGTH_M,
+  AMA_OFFSET_M,
+  HULL_BEAM_M,
+  HULL_LENGTH_M,
+  IAKO_SPACING_FRACTION,
+} from '../../lib/ama-flow/canoe-geometry';
 import { FINISH_GATE_HALF_WIDTH_M } from './game';
 import { Wake } from './wake';
 import { PRESETS } from '../../lib/ama-flow/presets';
@@ -36,31 +42,41 @@ interface BoatVisual {
 // sits about 5m aft of CG" note in ama-flow's oc6_stroke_config().
 const SEAT_X_POSITIONS = [5, 3, 1, -1, -3, -5];
 const CREW_SHIRT_COLOR = 0xff8c00;
-const CREW_SKIN_COLOR = 0xd8a878;
+const CREW_SKIN_COLOR = 0xc98f62;
+const CREW_HAIR_COLOR = 0x161b2c;
 const SEAT_HEIGHT_M = 0.85;
 
 const STROKE_TYPE_KEYS = ['forward', 'draw', 'poke', 'rudder'] as const;
+const PADDLE_SHAFT_COLOR = 0x20242f;
+// The blade's color, by the steersman's stroke type; the crew always paddles forward.
 const PADDLE_COLORS: Record<(typeof STROKE_TYPE_KEYS)[number], number> = {
-  forward: 0x6b4423,
+  forward: 0xefe7d2,
   draw: 0x3aa0c8,
   poke: 0xe07a2e,
   rudder: 0xd43c3c,
 };
 
-const OCEAN_SIZE_M = 500;
-const OCEAN_SEGMENTS = 140;
-const HULL_COLORS: Record<BoatId, number> = { player: 0x8b8bff, opponent: 0xe05a5a };
-const AMA_COLOR = 0xd2b48c;
-const IAKO_COLOR = 0x8c8c8c;
-const IAKO_BASE_Y_M = 0.26;
+const OCEAN_SIZE_M = 800;
+const OCEAN_SEGMENTS = 256;
+const HULL_COLORS: Record<BoatId, number> = { player: 0x8f8fff, opponent: 0xff7b6e };
+const AMA_COLOR = 0xe6e6ff;
+const IAKO_COLOR = 0x161b2c;
+const HULL_TOP_M = 0.5; // gunwale height above the waterline
+const HULL_DEPTH_M = 0.7;
+const AMA_TOP_M = 0.3;
+const AMA_DEPTH_M = 0.35;
+// Colors the ocean and sky shaders share, written as the sRGB values that reach the screen
+// (ShaderMaterial output is not tone mapped or color converted).
+const SUN_DIRECTION = new THREE.Vector3(60, 25, -80).normalize();
+const HAZE_COLOR = 0xc2cfc6; // where the sea meets the sky
+const ISLAND_COLORS = [0x7d96a3, 0x5f7c8b]; // far ridge, near ridge
+const ISLAND_DISTANCE_M = 3000;
 // Both boats run identical physics from (0, 0), so without this they'd render exactly on top of
 // each other. This offset is visual only -- applied to the mesh, never to the simulated state.
 const BOAT_LANE_OFFSET_M: Record<BoatId, number> = { player: 5, opponent: -5 };
 // Matches game.ts's FINISH_GATE_HALF_WIDTH_M, the actual rounding tolerance -- so the visible
 // gate is exactly as wide as what the physics enforces, not just a decoration.
 const FINISH_LINE_HALF_WIDTH_M = FINISH_GATE_HALF_WIDTH_M;
-const FINISH_BUOY_HEIGHT_M = 3;
-const TURN_BUOY_HEIGHT_M = 3;
 const TRACKER_LINE_HEIGHT_M = 1; // above mean sea level, so the dashed tracker clears the swell
 const TRACKER_START_AHEAD_M = 9; // starts just past the bow (6.7 m), clear of the hull and the camera's foreground
 const TRACKER_DASH_M = 3;
@@ -81,52 +97,84 @@ const FOAM_COUNT = 500;
 const FOAM_RADIUS_M = 60; // half-width of the foam patch around the camera
 const FOAM_COLOR = 0xffffff;
 
-/** A checkered finish gate: two buoy poles and a bright line between them, so the race has a
- * visible endpoint instead of just running out over open, featureless water. Built at the local
- * origin, facing local +X (the approach direction) -- the caller positions and rotates it to the
- * course's final waypoint (see AmaFlowScene's constructor).
+/** A floating marker: a rounded cone with a pole and a pennant, so it reads as a buoy from the
+ * chase camera at a few hundred metres.
+ */
+function buildBuoy(color: number): THREE.Group {
+  const group = new THREE.Group();
+  const material = new THREE.MeshStandardMaterial({ color, side: THREE.DoubleSide });
+  const body = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.4, 16), material);
+  body.position.y = 0.6;
+  const pole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.05, 0.05, 3, 6),
+    new THREE.MeshStandardMaterial({ color: PADDLE_SHAFT_COLOR }),
+  );
+  pole.position.y = 2.6;
+  const flagShape = new THREE.Shape();
+  flagShape.moveTo(0, 0);
+  flagShape.lineTo(1.4, -0.4);
+  flagShape.lineTo(0, -0.8);
+  const flag = new THREE.Mesh(new THREE.ShapeGeometry(flagShape), material);
+  flag.position.y = 4.1;
+  group.add(body, pole, flag);
+  return group;
+}
+
+/** The finish gate: two flagged buoys and a bright line between them, so the race has a visible
+ * endpoint instead of just running out over open water. Built at the local origin, facing local
+ * +X (the approach direction) -- the caller positions and rotates it to the course's final
+ * waypoint (see AmaFlowScene's constructor).
  */
 function buildFinishLine(): THREE.Group {
   const group = new THREE.Group();
-  const lineGeometry = new THREE.BoxGeometry(0.3, 0.05, FINISH_LINE_HALF_WIDTH_M * 2);
-  const lineMaterial = new THREE.MeshStandardMaterial({
-    color: 0xffe14d,
-    emissive: 0x554400,
-  });
-  const line = new THREE.Mesh(lineGeometry, lineMaterial);
+  const line = new THREE.Mesh(
+    new THREE.BoxGeometry(0.3, 0.05, FINISH_LINE_HALF_WIDTH_M * 2),
+    new THREE.MeshStandardMaterial({ color: 0xffe14d, emissive: 0x554400 }),
+  );
   line.position.y = 0.05;
   group.add(line);
-
-  const buoyGeometry = new THREE.CylinderGeometry(0.4, 0.4, FINISH_BUOY_HEIGHT_M, 12);
-  const buoyMaterial = new THREE.MeshStandardMaterial({ color: 0xff3b3b, emissive: 0x330000 });
   for (const z of [FINISH_LINE_HALF_WIDTH_M, -FINISH_LINE_HALF_WIDTH_M]) {
-    const buoy = new THREE.Mesh(buoyGeometry, buoyMaterial);
-    buoy.position.set(0, FINISH_BUOY_HEIGHT_M / 2, z);
+    const buoy = buildBuoy(0xff5a4d);
+    buoy.position.z = z;
     group.add(buoy);
   }
-
   return group;
 }
 
-/** A single turn buoy marking an intermediate course waypoint, distinct from the two-buoy finish
- * gate so a player can tell "turn here" from "done."
+/** A hull or float as a smooth, double-ended shell: U-shaped cross-sections that narrow to a
+ * point at each end, with the ends swept up a little. Centred on the origin, +x forward, the
+ * gunwale at y = topM.
  */
-function buildTurnBuoy(): THREE.Group {
-  const group = new THREE.Group();
-  const buoy = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.4, 0.4, TURN_BUOY_HEIGHT_M, 12),
-    new THREE.MeshStandardMaterial({ color: 0xffb703, emissive: 0x442400 }),
-  );
-  buoy.position.y = TURN_BUOY_HEIGHT_M / 2;
-  group.add(buoy);
-  return group;
-}
-
-function shapeFromOutline(points: [number, number][]): THREE.Shape {
-  const shape = new THREE.Shape();
-  points.forEach(([x, y], i) => (i === 0 ? shape.moveTo(x, y) : shape.lineTo(x, y)));
-  shape.closePath();
-  return shape;
+function buildShell(lengthM: number, beamM: number, topM: number, depthM: number, color: number): THREE.Mesh {
+  const stations = 24;
+  const ring = 9; // points around each cross-section, gunwale to keel to gunwale
+  const positions: number[] = [];
+  const indices: number[] = [];
+  for (let i = 0; i <= stations; i++) {
+    const s = (i / stations) * 2 - 1; // -1 stern .. +1 bow
+    const taper = Math.sqrt(1 - s * s); // 1 amidships, 0 at the ends
+    const sheer = topM + 0.25 * Math.abs(s) ** 3;
+    for (let j = 0; j < ring; j++) {
+      const angle = (j / (ring - 1)) * Math.PI;
+      positions.push(
+        (s * lengthM) / 2,
+        sheer - depthM * taper * Math.sin(angle) ** 0.7,
+        (beamM / 2) * taper * Math.cos(angle),
+      );
+    }
+  }
+  for (let i = 0; i < stations; i++) {
+    for (let j = 0; j < ring; j++) {
+      const a = i * ring + j;
+      const b = i * ring + ((j + 1) % ring); // wrapping closes the section across the deck
+      indices.push(a, a + ring, b, b, a + ring, b + ring);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color, side: THREE.DoubleSide, roughness: 0.45 }));
 }
 
 /** Share of a forward-stroke cycle spent pulling (the drive); the rest is recovery. Real paddle
@@ -242,20 +290,25 @@ function buildCrewFigure(): CrewFigure {
     new THREE.MeshStandardMaterial({ color: CREW_SKIN_COLOR }),
   );
   head.position.y = 0.75;
+  const hair = new THREE.Mesh(
+    new THREE.SphereGeometry(0.17, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2),
+    new THREE.MeshStandardMaterial({ color: CREW_HAIR_COLOR }),
+  );
+  head.add(hair);
   const paddle = buildPaddleMesh(PADDLE_COLORS.forward);
   paddle.position.y = 0.65;
   group.add(torso, head, paddle);
   return { group, paddle, torso, head };
 }
 
-/** A paddle shaft plus blade, colored by stroke type. Shared by the steersman's paddle and
- * every crew figure's paddle.
+/** A dark paddle shaft plus a blade colored by stroke type. Shared by the steersman's paddle
+ * and every crew figure's paddle.
  */
 function buildPaddleMesh(color: number): THREE.Group {
   const paddle = new THREE.Group();
   const shaft = new THREE.Mesh(
     new THREE.CylinderGeometry(0.03, 0.03, 1.4, 6),
-    new THREE.MeshStandardMaterial({ color }),
+    new THREE.MeshStandardMaterial({ color: PADDLE_SHAFT_COLOR }),
   );
   const blade = new THREE.Mesh(
     new THREE.BoxGeometry(0.03, 0.5, 0.22),
@@ -264,7 +317,6 @@ function buildPaddleMesh(color: number): THREE.Group {
   blade.position.y = -0.9;
   paddle.add(shaft, blade);
   paddle.userData.blade = blade;
-  paddle.userData.shaft = shaft;
   return paddle;
 }
 
@@ -338,33 +390,28 @@ class TrackerLine {
   }
 }
 
-/** A low-poly OC6 glyph: hull, ama, two iako, six paddlers, and the steersman's paddle, laid on
- * the water plane. Body-frame +x is forward; the mesh is built in the X-Z plane (Y up) so a
- * Y-axis rotation by heading psi orients it exactly as ama_flow's own top-down glyph would (sim
- * +y/port -> -Z). The ama is rigged to port, as on a real OC6.
+/** An OC6: hull, ama, two iako, six paddlers, and the steersman's paddle, resting on the water
+ * plane. Body-frame +x is forward and Y is up, so a Y-axis rotation by heading psi orients it as
+ * ama_flow's own top-down glyph would (sim +y/port -> -Z). The ama is rigged to port, as on a
+ * real OC6.
  */
 function buildCanoeMesh(hullColor: number, trackerColor: number): BoatVisual {
-  const outlines = canoeOutlines();
   const group = new THREE.Group();
 
-  function addPart(points: [number, number][], color: number, height: number, yOffset: number) {
-    // rotateX(-pi/2) below maps local (x, y) -> world (x, -y), so passing (x, y) unmapped here
-    // (rather than negating y first) puts sim +y (port) at world -z, i.e. to port -- matching
-    // setBoatState's threeZ = -y and the steersman paddle's port/-Z convention.
-    const shape = shapeFromOutline(points);
-    const geometry = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false });
-    geometry.rotateX(-Math.PI / 2); // extrude along Y after building flat in X-Z
-    const mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color }));
-    mesh.position.y = yOffset;
-    group.add(mesh);
+  group.add(buildShell(HULL_LENGTH_M, HULL_BEAM_M, HULL_TOP_M, HULL_DEPTH_M, hullColor));
+  const ama = buildShell(AMA_LENGTH_M, AMA_BEAM_M, AMA_TOP_M, AMA_DEPTH_M, AMA_COLOR);
+  ama.position.z = -AMA_OFFSET_M;
+  group.add(ama);
+  // Each iako arches from the hull's gunwale over to the top of the ama.
+  const iakoMaterial = new THREE.MeshStandardMaterial({ color: IAKO_COLOR });
+  for (const x of [AMA_LENGTH_M * IAKO_SPACING_FRACTION, -AMA_LENGTH_M * IAKO_SPACING_FRACTION]) {
+    const arch = new THREE.QuadraticBezierCurve3(
+      new THREE.Vector3(x, HULL_TOP_M, 0),
+      new THREE.Vector3(x, HULL_TOP_M + 0.45, -AMA_OFFSET_M * 0.6),
+      new THREE.Vector3(x, AMA_TOP_M, -AMA_OFFSET_M),
+    );
+    group.add(new THREE.Mesh(new THREE.TubeGeometry(arch, 12, 0.05, 6), iakoMaterial));
   }
-
-  addPart(outlines.hull, hullColor, 0.5, 0);
-  addPart(outlines.ama, AMA_COLOR, 0.25, 0.05);
-  // The beams sit just low enough to overlap the ama's top face (0.05 + 0.25), so they visibly land
-  // on the float instead of hovering above it; the hull is tall enough (0.5) to swallow their inner end.
-  addPart(outlines.forwardIako, IAKO_COLOR, 0.08, IAKO_BASE_Y_M);
-  addPart(outlines.aftIako, IAKO_COLOR, 0.08, IAKO_BASE_Y_M);
 
   const seatFigures = SEAT_X_POSITIONS.map((x) => {
     const figure = buildCrewFigure();
@@ -395,6 +442,72 @@ function buildCanoeMesh(hullColor: number, trackerColor: number): BoatVisual {
   return { group, steersman, crew, headingArrow, tracker };
 }
 
+// Shared by the sky dome and the ocean (which reflects it): the sky color in a given direction.
+const SKY_GLSL = /* glsl */ `
+  uniform vec3 uSunDirection;
+
+  float hash(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+  }
+
+  float valueNoise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
+               mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
+  }
+
+  float fbm(vec2 p) {
+    float sum = 0.0;
+    float amp = 0.5;
+    for (int i = 0; i < 4; i++) {
+      sum += amp * valueNoise(p);
+      p = p * 2.03 + 17.0;
+      amp *= 0.5;
+    }
+    return sum;
+  }
+
+  vec3 skyColor(vec3 dir) {
+    // Blue overhead, through pale blue to a warm cream band at the horizon.
+    float low = 1.0 - clamp(dir.y / 0.45, 0.0, 1.0);
+    vec3 color = mix(vec3(0.247, 0.392, 0.533), vec3(0.561, 0.690, 0.769), smoothstep(0.0, 0.55, low));
+    color = mix(color, vec3(0.851, 0.839, 0.769), smoothstep(0.55, 0.86, low));
+    color = mix(color, vec3(0.937, 0.886, 0.776), smoothstep(0.86, 1.0, low));
+    float toSun = max(dot(dir, uSunDirection), 0.0);
+    color += vec3(1.0, 0.93, 0.77) * (0.3 * pow(toSun, 6.0) + 0.9 * pow(toSun, 400.0));
+    return color;
+  }
+
+  // Long, soft cloud streaks, thinning out toward the horizon.
+  float cloudCover(vec3 dir) {
+    vec2 p = dir.xz / (dir.y + 0.12);
+    float streaks = fbm(p * vec2(0.9, 2.6) + 4.0);
+    return smoothstep(0.5, 0.78, streaks) * smoothstep(0.02, 0.14, dir.y) * 0.55;
+  }
+`;
+
+const SKY_VERTEX_SHADER = /* glsl */ `
+  varying vec3 vDirection;
+  void main() {
+    vDirection = position;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const SKY_FRAGMENT_SHADER = /* glsl */ `
+  ${SKY_GLSL}
+  uniform vec3 uHazeColor;
+  varying vec3 vDirection;
+  void main() {
+    vec3 dir = normalize(vDirection);
+    vec3 color = mix(skyColor(dir), vec3(1.0), cloudCover(dir));
+    // Below the horizon is only seen past the edge of the ocean mesh, which fades to the same haze.
+    gl_FragColor = vec4(mix(uHazeColor, color, smoothstep(-0.004, 0.004, dir.y)), 1.0);
+  }
+`;
+
 const OCEAN_VERTEX_SHADER = /* glsl */ `
   uniform float uTime;
   uniform vec3 uAmplitude;
@@ -406,6 +519,7 @@ const OCEAN_VERTEX_SHADER = /* glsl */ `
   uniform vec2 uWorldOffset;
   varying float vHeight;
   varying vec3 vNormal;
+  varying vec3 vWorldPosition;
 
   float phaseOf(vec2 dir, float k, float w, vec2 pos) {
     return k * dot(dir, pos) - w * uTime;
@@ -414,8 +528,8 @@ const OCEAN_VERTEX_SHADER = /* glsl */ `
   void main() {
     // The plane is built flat in local XY, then the mesh is rotated -90 deg about X so local
     // (x, y) -> world (x, z) = (x, -y). The mesh is also recentered under the camera every
-    // frame (an "infinite ocean" -- see AmaFlowScene.render) since it's a finite 500m plane
-    // and a race can cover more ground than that; uWorldOffset is the mesh's current world
+    // frame (an "infinite ocean" -- see AmaFlowScene.render) since it's a finite plane and a
+    // race can cover more ground than that; uWorldOffset is the mesh's current world
     // position, added back in so the wave pattern samples true world coordinates and stays
     // continuous as the mesh slides under the boats.
     vec2 pos = vec2(position.x, -position.y) + uWorldOffset;
@@ -443,31 +557,82 @@ const OCEAN_VERTEX_SHADER = /* glsl */ `
 
     vHeight = h;
     vNormal = normalize(vec3(-dx, 1.0, -dz));
+    vWorldPosition = vec3(pos.x, h, pos.y);
     vec3 displaced = vec3(position.x, position.y, h);
     gl_Position = projectionMatrix * modelViewMatrix * vec4(displaced, 1.0);
   }
 `;
 
+// Teal water lit the way open ocean is: mostly a reflection of the sky at grazing angles, the
+// water's own color where you look down into it, a sun glitter path, and foam on the highest
+// crests. Wind ripples are a noise-perturbed normal, drifting downwind.
 const OCEAN_FRAGMENT_SHADER = /* glsl */ `
+  ${SKY_GLSL}
+  uniform float uTime;
+  uniform vec2 uWindDirection;
+  uniform vec3 uHazeColor;
   varying float vHeight;
   varying vec3 vNormal;
-  uniform vec3 uDeepColor;
-  uniform vec3 uShallowColor;
-  uniform vec3 uSunDirection;
+  varying vec3 vWorldPosition;
+
+  float ripples(vec2 p) {
+    return fbm(p * 0.9 - uWindDirection * uTime * 0.7) + 0.5 * fbm(p * 2.7 - uWindDirection * uTime * 1.3);
+  }
 
   void main() {
-    float mixAmount = clamp(vHeight * 1.5 + 0.5, 0.0, 1.0);
-    vec3 base = mix(uDeepColor, uShallowColor, mixAmount);
-    float diffuse = clamp(dot(normalize(vNormal), normalize(uSunDirection)), 0.0, 1.0);
-    vec3 color = base * (0.6 + 0.4 * diffuse);
+    vec3 toCamera = cameraPosition - vWorldPosition;
+    float distance = length(toCamera);
+    vec3 view = toCamera / distance;
+
+    vec2 p = vWorldPosition.xz;
+    float e = 0.15;
+    float r0 = ripples(p);
+    vec2 slope = vec2(ripples(p + vec2(e, 0.0)) - r0, ripples(p + vec2(0.0, e)) - r0) / e;
+    // Ripples fade with distance: past a few hundred metres they are smaller than a pixel and
+    // would only shimmer.
+    float detail = 0.22 / (1.0 + distance * 0.02);
+    // The swell's own normal flattens out far away too, where the mesh is too coarse to carry it
+    // and it would band into moire near the horizon.
+    vec3 swellNormal = mix(vNormal, vec3(0.0, 1.0, 0.0), smoothstep(60.0, 260.0, distance));
+    vec3 normal = normalize(swellNormal + vec3(-slope.x, 0.0, -slope.y) * detail);
+
+    float crest = clamp(vHeight * 1.2 + 0.5, 0.0, 1.0);
+    vec3 water = mix(vec3(0.031, 0.188, 0.247), vec3(0.122, 0.420, 0.478), crest);
+    // Sunlight through the thin top of a wave facing the camera.
+    float backlit = pow(max(dot(view.xz, -normalize(uSunDirection.xz)), 0.0), 2.0);
+    water += vec3(0.10, 0.36, 0.33) * backlit * smoothstep(0.55, 1.0, crest);
+
+    float fresnel = 0.02 + 0.98 * pow(1.0 - max(dot(normal, view), 0.0), 5.0);
+    vec3 reflected = reflect(-view, normal);
+    reflected.y = abs(reflected.y);
+    vec3 color = mix(water, skyColor(reflected), fresnel);
+    color += vec3(1.0, 0.95, 0.82) * pow(max(dot(reflected, uSunDirection), 0.0), 220.0) * 1.6;
+
+    float foam = smoothstep(0.38, 0.55, vHeight) * smoothstep(0.72, 1.0, r0) * 0.85;
+    color = mix(color, vec3(0.96, 0.98, 0.98), foam);
+
+    color = mix(color, uHazeColor, smoothstep(160.0, 390.0, distance));
     gl_FragColor = vec4(color, 1.0);
   }
 `;
+
+/** A ridge line as a flat silhouette, `widthM` wide, from heights given as fractions of `heightM`. */
+function buildIsland(profile: number[], widthM: number, heightM: number, color: number): THREE.Mesh {
+  const shape = new THREE.Shape();
+  shape.moveTo(-widthM / 2, 0);
+  profile.forEach((h, i) => shape.lineTo((i / (profile.length - 1) - 0.5) * widthM, h * heightM));
+  shape.lineTo(widthM / 2, 0);
+  return new THREE.Mesh(
+    new THREE.ShapeGeometry(shape),
+    new THREE.MeshBasicMaterial({ color, fog: false, toneMapped: false }),
+  );
+}
 
 export class AmaFlowScene {
   private renderer: THREE.WebGLRenderer;
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
+  private backdrop = new THREE.Group(); // sky dome and islands, kept centred on the camera
   private ocean: THREE.Mesh;
   private oceanMaterial: THREE.ShaderMaterial;
   private waves: WaveComponent[];
@@ -476,7 +641,6 @@ export class AmaFlowScene {
   private wakes: Record<BoatId, Wake> = { player: new Wake(), opponent: new Wake() };
   private trackerStart = new THREE.Vector3(); // scratch vectors for setTrackerTarget
   private trackerEnd = new THREE.Vector3();
-  private lastPsi: Record<BoatId, number> = { player: 0, opponent: 0 };
   private cameraMode: CameraMode = 'chase';
   private cameraTarget = new THREE.Vector3();
   private cameraPosition = new THREE.Vector3(0, 20, -30);
@@ -487,29 +651,36 @@ export class AmaFlowScene {
     this.conditions = conditions;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    // Sky's shader outputs HDR-ish values; without tone mapping it clips straight to white.
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 0.45;
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(55, 1, 0.5, 20000);
-    // Blends the ocean into the horizon instead of meeting a flat, washed-out sky edge.
-    this.scene.fog = new THREE.Fog(0x9fd0e8, 150, 900);
+    // Hazes distant boats and buoys toward the same color the ocean fades to.
+    this.scene.fog = new THREE.Fog(HAZE_COLOR, 200, 900);
 
-    // A low sun (~15-20 deg elevation) reads as a blue sky-with-gradient; the previous ~55 deg
-    // sun lit the whole dome evenly and, combined with tone mapping, clipped toward white.
-    const sun = new THREE.DirectionalLight(0xffffff, 1.3);
-    sun.position.set(60, 25, -80);
-    this.scene.add(sun, new THREE.AmbientLight(0x404060, 0.9));
+    const sun = new THREE.DirectionalLight(0xfff4e0, 2.2);
+    sun.position.copy(SUN_DIRECTION);
+    this.scene.add(sun, new THREE.HemisphereLight(0xcfe0ee, 0x1f6b7a, 1.6));
 
-    const sky = new Sky();
-    sky.scale.setScalar(4000);
-    sky.material.uniforms.turbidity.value = 2;
-    sky.material.uniforms.rayleigh.value = 1.5;
-    sky.material.uniforms.mieCoefficient.value = 0.004;
-    sky.material.uniforms.mieDirectionalG.value = 0.8;
-    sky.material.uniforms.sunPosition.value.copy(sun.position).normalize();
-    this.scene.add(sky);
+    const hazeColor = new THREE.Color(HAZE_COLOR).convertLinearToSRGB(); // the hex is the on-screen color
+    const sky = new THREE.Mesh(
+      new THREE.SphereGeometry(8000, 32, 16),
+      new THREE.ShaderMaterial({
+        vertexShader: SKY_VERTEX_SHADER,
+        fragmentShader: SKY_FRAGMENT_SHADER,
+        uniforms: { uSunDirection: { value: SUN_DIRECTION }, uHazeColor: { value: hazeColor } },
+        side: THREE.BackSide,
+        depthWrite: false,
+      }),
+    );
+    // Two overlapping ridges off the starboard bow of the first leg, far enough to sit on the horizon.
+    const farRidge = buildIsland([0, 0.1, 0.45, 0.55, 0.85, 1, 0.9, 0.95, 0.8, 0.6, 0.3, 0], 2600, 260, ISLAND_COLORS[0]);
+    const nearRidge = buildIsland([0, 0.3, 0.75, 0.9, 1, 0.8, 0.5, 0.15, 0], 1500, 150, ISLAND_COLORS[1]);
+    farRidge.position.set(ISLAND_DISTANCE_M * 0.8, 0, ISLAND_DISTANCE_M * 0.6);
+    nearRidge.position.set(ISLAND_DISTANCE_M * 0.62, 0, ISLAND_DISTANCE_M * 0.72);
+    farRidge.lookAt(0, 0, 0);
+    nearRidge.lookAt(0, 0, 0);
+    this.backdrop.add(sky, farRidge, nearRidge);
+    this.scene.add(this.backdrop);
 
     this.waves = defaultSwell(conditions.wind_direction_rad);
     this.oceanMaterial = new THREE.ShaderMaterial({
@@ -523,9 +694,9 @@ export class AmaFlowScene {
         uDirection0: { value: new THREE.Vector2(...this.waves[0].direction) },
         uDirection1: { value: new THREE.Vector2(...this.waves[1].direction) },
         uDirection2: { value: new THREE.Vector2(...this.waves[2].direction) },
-        uDeepColor: { value: new THREE.Vector3(0.05, 0.3, 0.5) },
-        uShallowColor: { value: new THREE.Vector3(0.18, 0.58, 0.72) },
-        uSunDirection: { value: sun.position.clone().normalize() },
+        uWindDirection: { value: new THREE.Vector2(...this.waves[0].direction) },
+        uSunDirection: { value: SUN_DIRECTION },
+        uHazeColor: { value: hazeColor },
         uWorldOffset: { value: new THREE.Vector2(0, 0) },
       },
     });
@@ -556,7 +727,7 @@ export class AmaFlowScene {
     waypoints.forEach(([wx, wy], i) => {
       const [px, py] = i === 0 ? [0, 0] : waypoints[i - 1];
       const bearingRad = Math.atan2(wy - py, wx - px);
-      const marker = i === waypoints.length - 1 ? buildFinishLine() : buildTurnBuoy();
+      const marker = i === waypoints.length - 1 ? buildFinishLine() : buildBuoy(0xffc533);
       marker.position.set(wx, 0, -wy);
       marker.rotation.y = bearingRad;
       this.scene.add(marker);
@@ -574,7 +745,7 @@ export class AmaFlowScene {
     foamGeometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(FOAM_COUNT * 3), 3));
     this.foam = new THREE.Points(
       foamGeometry,
-      new THREE.PointsMaterial({ color: FOAM_COLOR, size: 0.5, sizeAttenuation: true, transparent: true, opacity: 0.8 }),
+      new THREE.PointsMaterial({ color: FOAM_COLOR, size: 0.22, sizeAttenuation: true, transparent: true, opacity: 0.8 }),
     );
     this.scene.add(this.foam);
 
@@ -604,7 +775,6 @@ export class AmaFlowScene {
     const arrow = this.boats[which].headingArrow;
     arrow.position.set(threeX, height + HEADING_ARROW_HEIGHT_M, threeZ);
     arrow.setDirection(new THREE.Vector3(Math.cos(psi), 0, -Math.sin(psi))); // sim +y/port -> world -z
-    this.lastPsi[which] = psi;
 
     const [currentVx, currentVy] = currentVelocity(this.conditions);
     this.wakes[which].update(threeX, threeZ, psi, elapsedSeconds, [currentVx, -currentVy], this.waves); // sim +y -> world -z
@@ -629,8 +799,8 @@ export class AmaFlowScene {
   }
 
   /** Update wind/current for a new race (conditions are randomized per race -- see game.ts's
-   * randomConditions). Only the swell direction depends on wind direction; amplitude, wavenumber
-   * and speed don't, so only the three direction uniforms need updating.
+   * randomConditions). Only the swell and ripple directions depend on wind direction; amplitude,
+   * wavenumber and speed don't, so only the direction uniforms need updating.
    */
   setConditions(conditions: Conditions): void {
     this.conditions = conditions;
@@ -638,17 +808,9 @@ export class AmaFlowScene {
     this.oceanMaterial.uniforms.uDirection0.value.set(...this.waves[0].direction);
     this.oceanMaterial.uniforms.uDirection1.value.set(...this.waves[1].direction);
     this.oceanMaterial.uniforms.uDirection2.value.set(...this.waves[2].direction);
+    this.oceanMaterial.uniforms.uWindDirection.value.set(...this.waves[0].direction);
     this.wakes.player.clear(); // a new race starts from the origin, so the old trails are meaningless
     this.wakes.opponent.clear();
-  }
-
-  /** The sim-frame heading (ama-flow's CCW-from-+x convention) that currently points "up" on
-   * screen, for the HUD wind/current compass: the focused boat's own heading in chase view, or a
-   * fixed angle in top-down view (that camera looks straight down with screen-up = world -z,
-   * which is sim +y -- see setBoatState's threeZ = -y).
-   */
-  viewUpAngleRad(focus: BoatId): number {
-    return this.cameraMode === 'top' ? Math.PI / 2 : this.lastPsi[focus];
   }
 
   /** Animate the always-forward-paddling crew (seats 1-5) in sync: alternating sides per
@@ -687,11 +849,8 @@ export class AmaFlowScene {
       paddle.rotation.z = -0.3 + 0.5 * swing;
     }
 
-    const color = PADDLE_COLORS[key];
     const blade = paddle.userData.blade as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
-    const shaft = paddle.userData.shaft as THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
-    blade.material.color.setHex(color);
-    shaft.material.color.setHex(color);
+    blade.material.color.setHex(PADDLE_COLORS[key]);
   }
 
   /** Advance wave time and the camera, then render one frame. */
@@ -736,7 +895,9 @@ export class AmaFlowScene {
     this.camera.up.set(0, this.cameraMode === 'top' ? 0 : 1, this.cameraMode === 'top' ? -1 : 0);
     this.camera.lookAt(this.cameraTarget);
 
-    // Recenter the (finite, 500m) ocean plane under the camera every frame -- an "infinite
+    this.backdrop.position.copy(this.cameraPosition);
+
+    // Recenter the (finite) ocean plane under the camera every frame -- an "infinite
     // ocean" trick -- so a race that covers more ground than that never sails off the edge into
     // empty space. The vertex shader samples the swell using this offset so the pattern stays
     // continuous as the mesh slides underneath it.

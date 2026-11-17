@@ -39,17 +39,13 @@ describe('Duel', () => {
     expect(duel.history('player').actions).toHaveLength(0);
   });
 
-  it('targets the first waypoint until captured, then the next', () => {
+  it('finishes the straight course at its one waypoint', () => {
     const duel = new Duel();
+    expect(COURSE_WAYPOINTS).toEqual([[200, 0]]);
     expect(duel.currentWaypoint('player')).toEqual(COURSE_WAYPOINTS[0]);
-    // Run the model (which should navigate toward the buoy) until either it's captured or the
-    // episode ends -- whichever happens first, this shouldn't throw or hang.
-    while (!duel.isDone('player') && duel.history('player').waypointIndex === 0) {
-      duel.step('player', policies.model(duel.observation('player')));
-    }
-    if (!duel.isDone('player')) {
-      expect(duel.currentWaypoint('player')).toEqual(COURSE_WAYPOINTS[1]);
-    }
+    while (!duel.isDone('player')) duel.step('player', policies.model(duel.observation('player')));
+    expect(duel.history('player').finished).toBe(true);
+    expect(duel.distanceMadeGoodM('player')).toBe(COURSE_LENGTH_M);
   });
 
   it('distanceMadeGoodM accumulates completed-leg length plus progress along the current leg', () => {

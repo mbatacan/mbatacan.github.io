@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compassRotationDeg } from '../compass';
+import { bearingSector, compassRotationDeg } from '../compass';
 
 describe('compassRotationDeg', () => {
   it('points straight up when the direction matches view-up', () => {
@@ -21,5 +21,25 @@ describe('compassRotationDeg', () => {
     const a = compassRotationDeg(0.4, -0.2);
     const b = compassRotationDeg(0.4 + 1.0, -0.2 + 1.0);
     expect(b).toBeCloseTo(a);
+  });
+});
+
+describe('bearingSector', () => {
+  it('names the eight sectors clockwise from ahead', () => {
+    expect(bearingSector(0)).toBe('ahead');
+    expect(bearingSector(45)).toBe('starboard bow');
+    expect(bearingSector(90)).toBe('starboard beam');
+    expect(bearingSector(135)).toBe('starboard quarter');
+    expect(bearingSector(180)).toBe('astern');
+    expect(bearingSector(-135)).toBe('port quarter');
+    expect(bearingSector(-90)).toBe('port beam');
+    expect(bearingSector(-45)).toBe('port bow');
+  });
+
+  it('wraps angles outside -180..180 and rounds to the nearest sector', () => {
+    expect(bearingSector(270)).toBe('port beam');
+    expect(bearingSector(-225)).toBe('starboard quarter');
+    expect(bearingSector(20)).toBe('ahead');
+    expect(bearingSector(25)).toBe('starboard bow');
   });
 });

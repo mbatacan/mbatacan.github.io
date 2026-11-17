@@ -568,263 +568,260 @@ footer {
   flex-direction: column;
   gap: 10px;
   width: 100%;
-  max-width: 900px;
-}
-
-.af-progress-track {
-  position: relative;
-  height: 10px;
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
-}
-
-.af-progress-marker {
-  position: absolute;
-  top: -3px;
-  width: 10px;
-  height: 16px;
-  border-radius: 2px;
-  transform: translateX(-50%);
-  transition: left 0.1s linear;
-}
-
-.af-progress-marker--blue {
-  background: #8b8bff;
-}
-
-.af-progress-marker--red {
-  background: #e05a5a;
-}
-
-.af-progress-finish {
-  position: absolute;
-  right: 0;
-  top: -4px;
-  width: 3px;
-  height: 18px;
-  background: #ffe14d;
-  border-radius: 1px;
+  max-width: 1120px;
 }
 
 .af-canvas-wrap {
   position: relative;
+  container-type: inline-size;
 }
 
 .af-canvas {
   width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 16 / 9;
   background: #04101c;
   border: 2px solid white;
   border-radius: 8px;
   display: block;
 }
 
-.af-compass {
+/* The in-view HUD. Everything inside is sized in em off this font size, which tracks the
+   canvas width (1cqw), so the panels keep their proportions as the canvas scales. */
+.af-overlay {
   position: absolute;
-  top: 16px;
-  left: 16px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  background: rgba(0, 0, 0, 0.5);
-  border-radius: 10px;
-  padding: 10px;
-}
-
-.af-compass-rose {
-  position: relative;
-  width: 96px;
-  height: 96px;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-}
-
-/* A fixed tick at the top marking the boat's own forward direction, since every needle below is
-   drawn relative to it (rotate(0deg) means "dead ahead"). */
-.af-compass-rose-marker {
-  position: absolute;
-  top: 4px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 0;
-  height: 0;
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-bottom: 8px solid rgba(255, 255, 255, 0.8);
-}
-
-/* Each needle pivots at the dial's center (transform-origin: bottom) and points outward toward
-   the rim at rotate(0deg) -- the same "0 = up" convention compassRotationDeg's callers assume.
-   A drop-shadow outline keeps each needle legible against the others when they nearly overlap. */
-.af-compass-needle {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 0;
-  height: 0;
-  margin-left: -6px;
-  margin-top: -38px;
-  transform-origin: 50% 38px;
-  border-left: 6px solid transparent;
-  border-right: 6px solid transparent;
-  border-bottom: 38px solid currentColor;
-  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.9)) drop-shadow(0 0 2px rgba(0, 0, 0, 0.9));
-}
-
-.af-compass-needle--target {
-  color: #4ade80;
-}
-
-.af-compass-needle--wind {
-  color: #ffffff;
-}
-
-.af-compass-needle--current {
-  color: #59d6ff;
-}
-
-.af-compass-legend {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: center;
-  /* Wide enough to fit all three items on one line -- at the old, narrower max-width they wrapped
-     to three separate lines, making the compass block taller than the status HUD below it (see
-     .af-status-hud) accounted for. */
-  max-width: 220px;
-}
-
-.af-compass-legend-item {
-  font-size: 0.72rem;
-  font-weight: 700;
+  inset: 0;
+  font-size: max(1cqw, 9px);
+  pointer-events: none;
   color: white;
-  white-space: nowrap;
 }
 
-.af-compass-legend-item::before {
-  content: '●';
-  margin-right: 3px;
+.af-panel,
+.af-speedo,
+.af-offcourse {
+  position: absolute;
+  background: rgba(12, 17, 38, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 0.7em;
+  backdrop-filter: blur(6px);
+  padding: 0.9em 1.1em;
+  line-height: 1.5;
 }
 
-.af-compass-legend-item--target::before {
-  color: #4ade80;
+.af-panel--race {
+  top: 1.4em;
+  left: 1.4em;
 }
 
-.af-compass-legend-item--wind::before {
-  color: #ffffff;
+.af-panel--course {
+  top: 1.4em;
+  right: 1.4em;
 }
 
-.af-compass-legend-item--current::before {
-  color: #59d6ff;
+.af-panel--sea {
+  bottom: 1.4em;
+  left: 1.4em;
+}
+
+.af-panel-title,
+.af-panel-rows dt,
+.af-speedo-note,
+.af-offcourse-labels {
+  color: #c9cfea;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.9em;
+}
+
+.af-panel-rows {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 0.1em 1.4em;
+  margin: 0.5em 0 0;
+}
+
+.af-panel-rows dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 700;
+}
+
+.af-panel-rows .af-lead {
+  color: #c3c3ff;
 }
 
 .af-minimap {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  border-radius: 6px;
+  display: block;
+  width: 10em;
+  margin-top: 0.4em;
 }
 
-.af-status-hud {
-  /* Below the compass/minimap row (each ~150-160px tall from the top), not alongside it -- at
-     the same top offset this centered, roughly-390px-wide element overlapped both. */
-  position: absolute;
-  top: 172px;
+.af-speedo {
+  top: 1.4em;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
-  gap: 6px;
   align-items: center;
+  gap: 0.3em;
 }
 
-.af-status-hud-item {
-  background: rgba(0, 0, 0, 0.55);
-  padding: 4px 10px;
-  border-radius: 4px;
+.af-speedo-value {
+  font-size: 1.6em;
+  line-height: 1;
+}
+
+.af-speedo-value span {
+  font-size: 2.75em;
+  font-weight: 700;
+}
+
+.af-chip-row {
+  display: flex;
+  gap: 0.4em;
+}
+
+.af-stroke-chip {
+  font-size: 0.9em;
+  padding: 0.1em 0.7em;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 0.5em;
+  color: #c9cfea;
+}
+
+.af-stroke-chip--active {
+  background: #c3c3ff;
+  border-color: #c3c3ff;
+  color: #12162c;
+  font-weight: 700;
+}
+
+.af-offcourse {
+  bottom: 1.4em;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 34em;
+}
+
+.af-offcourse-labels {
+  display: flex;
+  justify-content: space-between;
+}
+
+.af-offcourse-labels span span {
+  color: white;
+  font-weight: 700;
+}
+
+/* A centre tick marks "on course"; the marker slides either side of it. */
+.af-offcourse-bar {
+  position: relative;
+  height: 0.5em;
+  margin-top: 0.5em;
+  border-radius: 0.25em;
+  background:
+    linear-gradient(white, white) center / 1px 100% no-repeat,
+    rgba(255, 255, 255, 0.22);
+}
+
+.af-offcourse-marker {
+  position: absolute;
+  top: -0.35em;
+  left: 50%;
+  width: 0.5em;
+  height: 1.2em;
+  border-radius: 0.2em;
+  background: white;
+  transform: translateX(-50%);
+  transition: left 0.3s linear;
+}
+
+.af-camera-buttons {
+  position: absolute;
+  bottom: 1.4em;
+  right: 1.4em;
+  display: flex;
+  pointer-events: auto;
+}
+
+.af-camera-buttons .af-seg {
+  font-size: 1em;
+  background: rgba(12, 17, 38, 0.72);
+}
+
+/* Segmented buttons: neighbours share a border; the pressed one is filled. */
+.af-seg {
+  font-family: inherit;
   font-size: 0.8rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.af-status-hud-item--blue {
-  color: #8b8bff;
-}
-
-.af-status-hud-item--red {
-  color: #e05a5a;
-}
-
-.af-control-hud {
-  position: absolute;
-  bottom: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  flex-direction: column;
-  gap: 4px;
-  align-items: center;
-}
-
-/* :not([hidden]) rather than a bare `display: flex` above -- an explicit `display` in author
-   CSS overrides the UA stylesheet's `[hidden] { display: none }` regardless of specificity, so
-   the un-toggled rule would show this even while the `hidden` attribute is set. */
-.af-control-hud:not([hidden]) {
-  display: flex;
-}
-
-.af-control-hud-row {
-  display: flex;
-  gap: 6px;
-}
-
-.af-control-key {
-  font-size: 0.7rem;
-  padding: 2px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: white;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.6);
   border-radius: 4px;
-  background: rgba(0, 0, 0, 0.45);
-  color: rgba(255, 255, 255, 0.7);
+  padding: 3px 10px;
+  cursor: pointer;
 }
 
-.af-control-key--active {
-  background: #8b8bff;
-  border-color: #8b8bff;
-  color: #04101c;
+.af-seg:hover {
+  border-color: white;
+}
+
+.af-seg[aria-pressed='true'],
+.af-camera-buttons .af-seg[aria-pressed='true'] {
+  background: #c3c3ff;
+  border-color: #c3c3ff;
+  color: #12162c;
   font-weight: 700;
+}
+
+.af-seg-group:not([hidden]),
+.af-camera-buttons {
+  display: flex;
+}
+
+:is(.af-seg-group, .af-camera-buttons) .af-seg:not(:first-child) {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  margin-left: -1px;
+}
+
+:is(.af-seg-group, .af-camera-buttons) .af-seg:not(:last-child) {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+/* On a narrow canvas the side panels would cover the boats; keep the speed, the off-course bar
+   and the camera buttons. */
+@container (max-width: 640px) {
+  .af-panel {
+    display: none;
+  }
+
+  .af-speedo {
+    left: 1.4em;
+    transform: none;
+    font-size: 0.75em;
+  }
+
+  .af-offcourse {
+    left: 1.4em;
+    transform: none;
+    width: 19em;
+  }
 }
 
 .af-hud {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  align-items: center;
+  gap: 10px;
   font-size: 0.85rem;
 }
 
 .af-hud-item--blue {
-  color: #8b8bff;
+  color: #b8b8ff;
 }
 
 .af-hud-item--red {
-  color: #e05a5a;
-}
-
-.af-camera-toggle {
-  font-family: inherit;
-  font-size: 0.8rem;
-  color: white;
-  background: transparent;
-  border: 1px solid white;
-  border-radius: 4px;
-  padding: 2px 8px;
-  cursor: pointer;
-  margin-left: auto;
-}
-
-.af-camera-toggle:hover {
-  opacity: 0.8;
+  color: #ff8a8a;
 }
 
 .af-status {
@@ -857,18 +854,25 @@ footer {
 }
 
 /* :not([hidden]) rather than a bare `display: flex` -- an explicit `display` in author CSS
-   overrides the UA stylesheet's `[hidden] { display: none }` regardless of specificity (see
-   .af-control-hud, which had the identical bug fixed the same way). */
+   overrides the UA stylesheet's `[hidden] { display: none }` regardless of specificity. */
 .af-play-directions:not([hidden]) {
   display: flex;
 }
 
-.af-blue {
-  color: #8b8bff;
+.af-swatch {
+  display: inline-block;
+  width: 0.8em;
+  height: 0.8em;
+  border-radius: 2px;
+  vertical-align: baseline;
 }
 
-.af-red {
-  color: #e05a5a;
+.af-swatch--blue {
+  background: #8f8fff;
+}
+
+.af-swatch--red {
+  background: #ff7b6e;
 }
 
 .af-keys {
@@ -958,11 +962,11 @@ footer {
 }
 
 .af-results-row--blue td:first-child {
-  color: #8b8bff;
+  color: #b8b8ff;
 }
 
 .af-results-row--red td:first-child {
-  color: #e05a5a;
+  color: #ff8a8a;
 }
 
 .af-results-row--winner {
@@ -1071,7 +1075,7 @@ footer {
 }
 
 .af-grid-win td:last-child {
-  color: #8b8bff;
+  color: #b8b8ff;
 }
 
 .af-details .af-hint {

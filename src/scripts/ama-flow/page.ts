@@ -1,6 +1,6 @@
 // Controller for the /lab/rl-paddler page: owns the race state (Watch/Play, the Duel, clock and timer),
 // wires the page's controls (tabs, model picker, restart, speed, camera, keyboard), and runs the
-// render loop that feeds the three.js scene, compass, minimap and HUD. Imported by the page's
+// render loop that feeds the three.js scene, minimap and HUD. Imported by the page's
 // <script>; it assumes the page's markup (every element id below) is present.
 import {
   COURSE_LENGTH_M,
@@ -13,13 +13,16 @@ import {
   type SideId,
 } from './game';
 import { decodeAction, lerpState, type State } from '../../lib/ama-flow/physics';
-import { compassRotationDeg } from '../../lib/ama-flow/compass';
+import { bearingSector, compassRotationDeg } from '../../lib/ama-flow/compass';
 import { drawMinimap } from './minimap';
 import type { AmaFlowScene } from './scene';
 
 const SIDE_NAMES = ['port', 'starboard'];
 const STROKE_TYPE_NAMES = ['forward', 'draw', 'poke', 'rudder'];
 const MPS_TO_KT = 1.94384;
+
+const BOAT_COLORS = { player: '#8f8fff', opponent: '#ff7b6e' };
+const OFF_COURSE_BAR_DEG = 30; // heading error at which the off-course marker reaches the bar's end
 
 type Mode = 'watch' | 'play';
 
@@ -51,22 +54,26 @@ const resultsRedDistanceEl = document.getElementById('af-results-red-distance')!
 const resultsRedSpeedEl = document.getElementById('af-results-red-speed')!;
 const resultsCloseBtn = document.getElementById('af-results-close')!;
 document.getElementById('af-results-distance-header')!.textContent = `distance (of ${COURSE_LENGTH_M} m)`;
-const cameraToggleBtn = document.getElementById('af-camera-toggle')!;
-const speedToggleBtn = document.getElementById('af-speed-toggle')!;
-const compassTargetEl = document.getElementById('af-compass-target')!;
-const compassWindEl = document.getElementById('af-compass-wind')!;
-const compassWindLabelEl = document.getElementById('af-compass-wind-label')!;
-const compassCurrentEl = document.getElementById('af-compass-current')!;
-const compassCurrentLabelEl = document.getElementById('af-compass-current-label')!;
-const progressBlueEl = document.getElementById('af-progress-blue')!;
-const progressRedEl = document.getElementById('af-progress-red')!;
+const cameraButtons = {
+  chase: document.getElementById('af-camera-chase')!,
+  top: document.getElementById('af-camera-top')!,
+};
+const pauseBtn = document.getElementById('af-pause')!;
+const speedGroupEl = document.getElementById('af-speed')!;
+const speedButtons = [...speedGroupEl.querySelectorAll<HTMLElement>('[data-speed]')];
+const hudConditionsEl = document.getElementById('af-hud-conditions')!;
+const hudMarkEl = document.getElementById('af-hud-mark')!;
+const hudLeadLabelEl = document.getElementById('af-hud-lead-label')!;
+const hudLeadEl = document.getElementById('af-hud-lead')!;
+const hudSpeedEl = document.getElementById('af-hud-speed')!;
+const hudMadeGoodEl = document.getElementById('af-hud-made-good')!;
+const hudWindEl = document.getElementById('af-hud-wind')!;
+const hudCurrentEl = document.getElementById('af-hud-current')!;
+const hudOffCourseEl = document.getElementById('af-hud-offcourse')!;
+const offCourseMarkerEl = document.getElementById('af-offcourse-marker')!;
 const minimapCanvas = document.getElementById('af-minimap') as HTMLCanvasElement;
-const controlHudEl = document.getElementById('af-control-hud')!;
-const controlKeySideEls = [
-  document.getElementById('af-control-key-side-0')!,
-  document.getElementById('af-control-key-side-1')!,
-];
-const controlKeyStrokeEls = [0, 1, 2, 3].map((i) => document.getElementById(`af-control-key-stroke-${i}`)!);
+const chipSideEls = [0, 1].map((i) => document.getElementById(`af-chip-side-${i}`)!);
+const chipStrokeEls = [0, 1, 2, 3].map((i) => document.getElementById(`af-chip-stroke-${i}`)!);
 
 const STROKE_DURATION_S = 1.1; // matches ama-flow's oc6_stroke_config().duration_s -- sim time
 // Real-world OC6 crews hold about 50 strokes per minute; render at that pace regardless of
@@ -75,28 +82,38 @@ const STROKE_PERIOD_S = 60 / 50; // real seconds per stroke
 const SPEED = STROKE_DURATION_S / STROKE_PERIOD_S; // sim-seconds per real second
 
 let mode: Mode = 'watch';
-let modelLabel = 'model'; // the selected checkpoint's label, set by applySelectedModel()
 let duel = new Duel(randomConditions(Math.floor(Math.random() * 1_000_000)));
 let scene: AmaFlowScene | null = null; // set once the dynamic import below resolves
 let running = false;
+let paused = false;
 let clockS = 0;
 let lastTimeMs: number | null = null;
 const control = { side: 0, strokeType: 0 }; // PORT forward, until the player changes it
 
-// Wall-clock race timer -- raceStartMs and the timestamps requestAnimationFrame hands frame()
-// share the same time origin as performance.now(), so they're directly comparable.
-let raceStartMs = 0;
+// Race clock: accumulated from frame deltas (not wall-clock), so it stops while paused and runs
+// with the playback speed.
 let elapsedRaceS = 0;
 
 // Watch-only playback speed multiplier -- Play always runs at 1x, so the controls feel
 // consistent regardless of what Watch was last left at.
-const SPEED_MULTIPLIERS = [1, 2, 4];
 let speedMultiplier = 1;
-speedToggleBtn.addEventListener('click', () => {
-  const i = SPEED_MULTIPLIERS.indexOf(speedMultiplier);
-  speedMultiplier = SPEED_MULTIPLIERS[(i + 1) % SPEED_MULTIPLIERS.length];
-  speedToggleBtn.textContent = `${speedMultiplier}x speed`;
-});
+function setSpeed(multiplier: number): void {
+  speedMultiplier = multiplier;
+  speedButtons.forEach((el) => el.setAttribute('aria-pressed', String(Number(el.dataset.speed) === multiplier)));
+}
+speedButtons.forEach((el) => el.addEventListener('click', () => setSpeed(Number(el.dataset.speed))));
+
+function setPaused(next: boolean): void {
+  paused = next;
+  pauseBtn.setAttribute('aria-pressed', String(next));
+  pauseBtn.textContent = next ? 'resume' : 'pause';
+}
+pauseBtn.addEventListener('click', () => setPaused(!paused));
+
+/** What each canoe is called on the page: periwinkle first, coral second. */
+function boatNames(): [string, string] {
+  return mode === 'watch' ? ['agent', 'scripted'] : ['you', 'agent'];
+}
 
 function bluePlayerSide(): SideId {
   return 'player'; // blue is always the "player" slot: the model in Watch, you in Play
@@ -121,14 +138,13 @@ function stepOneStroke(): void {
   (['player', 'opponent'] as SideId[]).forEach((side) => {
     if (!duel.isDone(side)) duel.step(side, actionFor(side));
   });
-  hudStrokeEl.textContent = `stroke ${duel.history('player').actions.length}/${EPISODE_STROKES}`;
+  hudStrokeEl.textContent = `${duel.history('player').actions.length}/${EPISODE_STROKES}`;
   if (duel.isDone('player') && duel.isDone('opponent')) finish();
 }
 
 function finish(): void {
   running = false;
-  const blueLabel = mode === 'watch' ? modelLabel : 'you';
-  const redLabel = mode === 'watch' ? 'baseline' : modelLabel;
+  const [blueLabel, redLabel] = boatNames();
   const blueRms = duel.rmsHeadingErrorDeg(bluePlayerSide());
   const redRms = duel.rmsHeadingErrorDeg(redOpponentSide());
   const blueVmg = duel.distanceMadeGoodM(bluePlayerSide());
@@ -146,7 +162,7 @@ function finish(): void {
   // distanceMadeGoodM caps at COURSE_LENGTH_M for anyone who completes it), fall back to
   // whoever held heading tighter.
   const blueWins = distanceGapM > 0 ? blueVmg > redVmg : blueRms < redRms;
-  const winnerName = blueWins ? `blue (${blueLabel})` : `red (${redLabel})`;
+  const winnerName = blueWins ? blueLabel : redLabel;
   const margin =
     distanceGapM > 0
       ? `${distanceGapM.toFixed(0)} m further along the course`
@@ -160,7 +176,7 @@ function finish(): void {
   resultsMarginEl.textContent = `by ${margin}`;
   resultsTimeEl.textContent = `race time ${elapsedRaceS.toFixed(1)}s`;
 
-  resultsBlueLabelEl.textContent = `blue (${blueLabel})`;
+  resultsBlueLabelEl.textContent = blueLabel;
   resultsBlueRmsEl.textContent = `${blueRms.toFixed(1)} deg`;
   // "made good" is sailing jargon for actual progress toward the goal (vs. raw distance
   // traveled, which drifting off course would inflate) -- spelled out here instead. The course
@@ -168,7 +184,7 @@ function finish(): void {
   resultsBlueDistanceEl.textContent = `${blueVmg.toFixed(0)} m`;
   resultsBlueSpeedEl.textContent = `${blueAvgSpeedKt.toFixed(1)} kt`;
 
-  resultsRedLabelEl.textContent = `red (${redLabel})`;
+  resultsRedLabelEl.textContent = redLabel;
   resultsRedRmsEl.textContent = `${redRms.toFixed(1)} deg`;
   resultsRedDistanceEl.textContent = `${redVmg.toFixed(0)} m`;
   resultsRedSpeedEl.textContent = `${redAvgSpeedKt.toFixed(1)} kt`;
@@ -184,24 +200,23 @@ function restart(): void {
   duel = new Duel(randomConditions(seed), seed);
   clockS = 0;
   lastTimeMs = null;
-  raceStartMs = performance.now();
   elapsedRaceS = 0;
   hudTimeEl.textContent = '0.0s';
-  hudStrokeEl.textContent = `stroke 0/${EPISODE_STROKES}`;
+  hudStrokeEl.textContent = `0/${EPISODE_STROKES}`;
   resultsEl.hidden = true;
   running = true;
+  setPaused(false);
   scene?.setConditions(duel.conditions);
-  compassWindLabelEl.textContent = `wind ${(duel.conditions.wind_speed_mps * MPS_TO_KT).toFixed(0)} kt`;
-  compassCurrentLabelEl.textContent = `current ${(duel.conditions.current_speed_mps * MPS_TO_KT).toFixed(1)} kt`;
+  hudConditionsEl.textContent = `${windKt()} kt wind, ${currentKt()} kt current`;
 }
 
-/** Highlights the player's current side/stroke-type selection directly on the canvas, so
- * Play mode doesn't require looking away to the controls column to know what's selected.
- */
-function updateControlHud(): void {
-  controlHudEl.hidden = mode !== 'play';
-  controlKeySideEls.forEach((el, i) => el.classList.toggle('af-control-key--active', i === control.side));
-  controlKeyStrokeEls.forEach((el, i) => el.classList.toggle('af-control-key--active', i === control.strokeType));
+const windKt = () => (duel.conditions.wind_speed_mps * MPS_TO_KT).toFixed(0);
+const currentKt = () => (duel.conditions.current_speed_mps * MPS_TO_KT).toFixed(1);
+
+/** Lights the side and stroke-type chips around the speed readout. */
+function showStroke(side: number, strokeType: number): void {
+  chipSideEls.forEach((el, i) => el.classList.toggle('af-stroke-chip--active', i === side));
+  chipStrokeEls.forEach((el, i) => el.classList.toggle('af-stroke-chip--active', i === strokeType));
 }
 
 function setMode(next: Mode): void {
@@ -211,12 +226,8 @@ function setMode(next: Mode): void {
   playDirectionsEl.hidden = next !== 'play';
   legendWatchEl.hidden = next !== 'watch';
   legendPlayEl.hidden = next !== 'play';
-  hudBlueEl.textContent = next === 'watch' ? `blue (${modelLabel}): —` : 'blue (you): —';
-  hudRedEl.textContent = next === 'watch' ? 'red (baseline): —' : `red (${modelLabel}): —`;
-  speedToggleBtn.hidden = next !== 'watch';
-  speedMultiplier = 1;
-  speedToggleBtn.textContent = '1x speed';
-  updateControlHud();
+  speedGroupEl.hidden = next !== 'watch';
+  setSpeed(1);
   restart();
 }
 
@@ -224,7 +235,6 @@ const modelSelectEl = document.getElementById('af-model-select') as HTMLSelectEl
 /** Points the game at the selected checkpoint and shows only that entry's info panel. */
 function applySelectedModel(): void {
   setSelectedPolicy(modelSelectEl.value);
-  modelLabel = modelSelectEl.selectedOptions[0].textContent ?? modelSelectEl.value;
   document.querySelectorAll<HTMLElement>('.af-model-entry').forEach((el) => {
     el.hidden = el.dataset.modelId !== modelSelectEl.value;
   });
@@ -248,8 +258,6 @@ window.addEventListener('keydown', (e) => {
   else if (e.key === '2') control.strokeType = 1;
   else if (e.key === '3') control.strokeType = 2;
   else if (e.key === '4') control.strokeType = 3;
-  else return;
-  updateControlHud();
 });
 
 import('./scene').then(({ AmaFlowScene }) => {
@@ -260,21 +268,18 @@ import('./scene').then(({ AmaFlowScene }) => {
   const resizeObserver = new ResizeObserver(() => activeScene.resize());
   resizeObserver.observe(canvas);
 
-  // Conditions are fixed for the episode, so the compass labels are set once; only each
-  // arrow's rotation (relative to the current view) changes per frame, below.
-  compassWindLabelEl.textContent = `wind ${(duel.conditions.wind_speed_mps * MPS_TO_KT).toFixed(0)} kt`;
-  compassCurrentLabelEl.textContent = `current ${(duel.conditions.current_speed_mps * MPS_TO_KT).toFixed(1)} kt`;
+  hudConditionsEl.textContent = `${windKt()} kt wind, ${currentKt()} kt current`;
 
-  let cameraMode: 'chase' | 'top' = 'chase';
-  cameraToggleBtn.addEventListener('click', () => {
-    cameraMode = cameraMode === 'chase' ? 'top' : 'chase';
-    activeScene.setCameraMode(cameraMode);
-    cameraToggleBtn.textContent = cameraMode === 'chase' ? 'top-down view' : 'chase view';
+  (['chase', 'top'] as const).forEach((cameraMode) => {
+    cameraButtons[cameraMode].addEventListener('click', () => {
+      activeScene.setCameraMode(cameraMode);
+      cameraButtons.chase.setAttribute('aria-pressed', String(cameraMode === 'chase'));
+      cameraButtons.top.setAttribute('aria-pressed', String(cameraMode === 'top'));
+    });
   });
 
-  statusEl.textContent = 'ready';
+  statusEl.textContent = '';
   running = true;
-  raceStartMs = performance.now(); // the first race, same as restart() does for every one after
 
   function frame(timeMs: number) {
     requestAnimationFrame(frame);
@@ -282,8 +287,8 @@ import('./scene').then(({ AmaFlowScene }) => {
     const dtS = Math.min((timeMs - lastTimeMs) / 1000, 0.25);
     lastTimeMs = timeMs;
 
-    if (running) {
-      elapsedRaceS = (timeMs - raceStartMs) / 1000;
+    if (running && !paused) {
+      elapsedRaceS += dtS * speedMultiplier;
       hudTimeEl.textContent = `${elapsedRaceS.toFixed(1)}s`;
       clockS += dtS * SPEED * speedMultiplier;
       while (clockS >= STROKE_DURATION_S) {
@@ -298,6 +303,7 @@ import('./scene').then(({ AmaFlowScene }) => {
     // perfectly smooth motion, since the *next* state doesn't exist until the timer fires.
     const t = clockS / STROKE_DURATION_S;
     const renderStates: Record<SideId, State> = { player: [0, 0, 0, 0, 0, 0], opponent: [0, 0, 0, 0, 0, 0] };
+    const tracks: Record<SideId, [number, number][]> = { player: [], opponent: [] };
     for (const side of ['player', 'opponent'] as SideId[]) {
       const states = duel.history(side).states;
       const i = Math.min(states.length - 1, states.length - (duel.isDone(side) ? 1 : 2));
@@ -305,6 +311,7 @@ import('./scene').then(({ AmaFlowScene }) => {
       const b = states[Math.min(i + 1, states.length - 1)];
       const state = duel.isDone(side) ? states[states.length - 1] : lerpState(a, b, t);
       renderStates[side] = state;
+      tracks[side] = states.slice(0, Math.max(i, 0) + 1).map((s): [number, number] => [s[0], s[1]]);
       activeScene.setBoatState(side, state[0], state[1], state[2], elapsed);
 
       const waypoint = duel.currentWaypoint(side);
@@ -319,26 +326,20 @@ import('./scene').then(({ AmaFlowScene }) => {
     }
     activeScene.render(elapsed, bluePlayerSide());
 
-    const viewUp = activeScene.viewUpAngleRad(bluePlayerSide());
-    compassWindEl.style.transform = `rotate(${compassRotationDeg(duel.conditions.wind_direction_rad, viewUp)}deg)`;
-    compassCurrentEl.style.transform = `rotate(${compassRotationDeg(duel.conditions.current_direction_rad, viewUp)}deg)`;
-    const targetHeadingRad = duel.currentTargetHeadingRad(bluePlayerSide());
-    compassTargetEl.style.transform = `rotate(${compassRotationDeg(targetHeadingRad, viewUp)}deg)`;
+    drawMinimap(
+      minimapCanvas,
+      (['opponent', 'player'] as SideId[]).map((side) => ({
+        x: renderStates[side][0],
+        y: renderStates[side][1],
+        headingRad: renderStates[side][2],
+        color: BOAT_COLORS[side],
+        track: tracks[side],
+      })),
+    );
 
-    // A fixed (world-up) orientation, not heading-up: rotating the map with the player's
-    // heading was tried and reverted -- even smoothed, the constant small steering corrections
-    // made the whole map visibly swim rather than only reorienting for the one real turn.
-    drawMinimap(minimapCanvas, [
-      { x: renderStates.player[0], y: renderStates.player[1], headingRad: renderStates.player[2], color: '#8b8bff' },
-      { x: renderStates.opponent[0], y: renderStates.opponent[1], headingRad: renderStates.opponent[2], color: '#e05a5a' },
-    ]);
-
-    const blueLabel = mode === 'watch' ? modelLabel : 'you';
-    const redLabel = mode === 'watch' ? 'baseline' : modelLabel;
+    const [blueLabel, redLabel] = boatNames();
     const blueErr = duel.history('player').headingErrorDeg.at(-1) ?? 0;
     const redErr = duel.history('opponent').headingErrorDeg.at(-1) ?? 0;
-    const blueSpeedKt = renderStates.player[3] * MPS_TO_KT;
-    const redSpeedKt = renderStates.opponent[3] * MPS_TO_KT;
     const blueAction = duel.history('player').actions.at(-1);
     const redAction = duel.history('opponent').actions.at(-1);
     const strokeText = (action: number | undefined) => {
@@ -346,13 +347,41 @@ import('./scene').then(({ AmaFlowScene }) => {
       const { side: s, strokeType: st } = decodeAction(action);
       return ` · ${SIDE_NAMES[s]} ${STROKE_TYPE_NAMES[st]}`;
     };
-    hudBlueEl.textContent = `blue (${blueLabel}): ${blueErr.toFixed(1)} deg · ${blueSpeedKt.toFixed(1)} kt${strokeText(blueAction)}`;
-    hudRedEl.textContent = `red (${redLabel}): ${redErr.toFixed(1)} deg · ${redSpeedKt.toFixed(1)} kt${strokeText(redAction)}`;
+    hudBlueEl.textContent = `${blueLabel}: ${blueErr.toFixed(1)} deg · ${(renderStates.player[3] * MPS_TO_KT).toFixed(1)} kt${strokeText(blueAction)}`;
+    hudRedEl.textContent = `${redLabel}: ${redErr.toFixed(1)} deg · ${(renderStates.opponent[3] * MPS_TO_KT).toFixed(1)} kt${strokeText(redAction)}`;
 
-    const progressPct = (side: SideId) =>
-      `${Math.max(0, Math.min(1, duel.distanceMadeGoodM(side) / COURSE_LENGTH_M)) * 100}%`;
-    progressBlueEl.style.left = progressPct('player');
-    progressRedEl.style.left = progressPct('opponent');
+    // The in-view HUD follows the periwinkle canoe.
+    const [x, y, psi, u, v] = renderStates.player;
+    const legBearing = duel.currentTargetHeadingRad('player');
+    // Ground velocity (body frame u, v) projected on the leg's bearing.
+    const madeGoodMps = u * Math.cos(psi - legBearing) - v * Math.sin(psi - legBearing);
+    hudSpeedEl.textContent = (u * MPS_TO_KT).toFixed(1);
+    hudMadeGoodEl.textContent = (madeGoodMps * MPS_TO_KT).toFixed(1);
+
+    const mark = duel.currentWaypoint('player');
+    hudMarkEl.textContent = `${Math.hypot(mark[0] - x, mark[1] - y).toFixed(0)} m`;
+
+    const leadM = duel.distanceMadeGoodM('player') - duel.distanceMadeGoodM('opponent');
+    const leader = leadM > 0 ? blueLabel : redLabel;
+    hudLeadLabelEl.textContent = Math.abs(leadM) < 0.5 ? 'level' : `${leader} ${leader === 'you' ? 'lead' : 'leads'} by`;
+    hudLeadEl.textContent = Math.abs(leadM) < 0.5 ? '' : `${Math.abs(leadM).toFixed(0)} m`;
+
+    // Boat-relative: the wind by where it comes from, the current by where it sets toward.
+    const { wind_direction_rad, current_direction_rad } = duel.conditions;
+    hudWindEl.textContent = `${windKt()} kt from ${bearingSector(compassRotationDeg(wind_direction_rad, psi) + 180)}`;
+    hudCurrentEl.textContent = `${currentKt()} kt toward ${bearingSector(compassRotationDeg(current_direction_rad, psi))}`;
+
+    // Positive heading error is bow to port of the course, so the marker moves left.
+    hudOffCourseEl.textContent = Math.abs(blueErr).toFixed(0);
+    const offCourse = Math.max(-1, Math.min(1, blueErr / OFF_COURSE_BAR_DEG));
+    offCourseMarkerEl.style.left = `${50 - offCourse * 50}%`;
+
+    // Play shows the stroke you have selected (it fires next); Watch shows the agent's last one.
+    if (mode === 'play') showStroke(control.side, control.strokeType);
+    else if (blueAction !== undefined) {
+      const { side: s, strokeType: st } = decodeAction(blueAction);
+      showStroke(s, st);
+    }
   }
   requestAnimationFrame(frame);
 });
