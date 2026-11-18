@@ -553,7 +553,12 @@ footer {
   opacity: 0.6;
 }
 
-.af-tab[aria-selected='true'] {
+a.af-tab {
+  text-decoration: none;
+}
+
+.af-tab[aria-selected='true'],
+.af-tab[aria-current='page'] {
   opacity: 1;
   background: rgba(255, 255, 255, 0.12);
 }

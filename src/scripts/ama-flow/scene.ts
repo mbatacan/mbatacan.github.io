@@ -40,7 +40,8 @@ interface BoatVisual {
 
 // Body-frame x of each seat, stern (steersman, seat 6) to bow (seat 1) -- mirrors the "steersman
 // sits about 5m aft of CG" note in ama-flow's oc6_stroke_config().
-const SEAT_X_POSITIONS = [5, 3, 1, -1, -3, -5];
+// The OC1 is one paddler, who is the steersman.
+const SEAT_X_POSITIONS = PRESETS.crew.seat_sides.length === 0 ? [0] : [5, 3, 1, -1, -3, -5];
 const CREW_SHIRT_COLOR = 0xff8c00;
 const CREW_SKIN_COLOR = 0xc98f62;
 const CREW_HAIR_COLOR = 0x161b2c;
