@@ -3,7 +3,7 @@
 // src/data/ama-flow/parity.json (see parity.test.ts) -- no onnxruntime needed, since the
 // exported network is tiny (18 -> 64 -> 64 -> 8, tanh-activated).
 import policyIndex from '../../data/ama-flow/policies/index.json';
-import { ObsIndex, PRESETS } from './presets';
+import { CANOE, ObsIndex, PRESETS, type CanoeId } from './presets';
 
 interface PolicyLayer {
   weight: number[][]; // [out_features, in_features]
@@ -39,21 +39,37 @@ const POLICY_FILES = import.meta.glob<PolicyEntry>(
   { eager: true, import: 'default' },
 );
 
-/** Which entry loads first, and the order the picker lists them in: set by ama-flow's manifest. */
-export const DEFAULT_POLICY_ID: string = policyIndex.default;
+const idsFor = (canoe: CanoeId): string[] =>
+  policyIndex.order.filter((id) => policyIndex.canoes[id as keyof typeof policyIndex.canoes] === canoe);
 
-/** Every published entry, in manifest order. */
-export const POLICY_ENTRIES: PolicyEntry[] = policyIndex.order.map((id) => {
-  const entry = POLICY_FILES[`../../data/ama-flow/policies/${id}.json`];
-  if (!entry) {
-    throw new Error(
-      `policies/index.json lists "${id}" but policies/${id}.json is missing (found: ${Object.keys(POLICY_FILES).join(', ')})`,
-    );
-  }
-  return entry;
-});
+/** A canoe's published entries in manifest order (the manifest sets the order). */
+export function policyEntriesFor(canoe: CanoeId): PolicyEntry[] {
+  return idsFor(canoe).map((id) => {
+    const entry = POLICY_FILES[`../../data/ama-flow/policies/${id}.json`];
+    if (!entry) {
+      throw new Error(
+        `policies/index.json lists "${id}" but policies/${id}.json is missing (found: ${Object.keys(POLICY_FILES).join(', ')})`,
+      );
+    }
+    return entry;
+  });
+}
 
-const POLICY_BY_ID = new Map(POLICY_ENTRIES.map((entry) => [entry.meta.id, entry]));
+/** Which entry loads first: the manifest default if it is this canoe's, else this canoe's first. */
+export function defaultPolicyIdFor(canoe: CanoeId): string {
+  const ids = idsFor(canoe);
+  return ids.includes(policyIndex.default) ? policyIndex.default : ids[0];
+}
+
+export const DEFAULT_POLICY_ID: string = defaultPolicyIdFor(CANOE);
+
+/** Every published entry for this page's canoe. */
+export const POLICY_ENTRIES: PolicyEntry[] = policyEntriesFor(CANOE);
+
+/** Every canoe's entries, so a policy id resolves wherever it is looked up (tests, both pages). */
+export const ALL_POLICY_ENTRIES: PolicyEntry[] = [...policyEntriesFor('oc6'), ...policyEntriesFor('oc1')];
+
+const POLICY_BY_ID = new Map(ALL_POLICY_ENTRIES.map((entry) => [entry.meta.id, entry]));
 
 function linear(weight: number[][], bias: number[], input: ArrayLike<number>): number[] {
   const out = new Array<number>(weight.length);

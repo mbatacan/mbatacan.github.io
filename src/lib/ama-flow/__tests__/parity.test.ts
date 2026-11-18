@@ -2,10 +2,11 @@
 // by ama_flow/export/web.py. This is the real correctness contract for physics.ts/policy.ts --
 // not just "it compiles and looks like the Python."
 import { describe, expect, it } from 'vitest';
-import parityData from '../../../data/ama-flow/parity.json';
+import parityOc6 from '../../../data/ama-flow/parity.json';
+import parityOc1 from '../../../data/ama-flow/parity-oc1.json';
 import { advanceStroke, buildObservation, type Conditions, type State } from '../physics';
-import { baselineAction, policyAction, POLICY_ENTRIES } from '../policy';
-import { PRESETS } from '../presets';
+import { ALL_POLICY_ENTRIES, baselineAction, policyAction } from '../policy';
+import { presetsFor, type CanoeId } from '../presets';
 
 interface ParityStep {
   action: number;
@@ -31,14 +32,19 @@ interface ParityData {
   baseline_obs_actions: ParityObsAction[];
 }
 
-const PARITY = parityData as ParityData;
+const PARITY_BY_CANOE: [CanoeId, ParityData][] = [
+  ['oc6', parityOc6 as ParityData],
+  ['oc1', parityOc1 as ParityData],
+];
+const PARITY = PARITY_BY_CANOE[0][1];
 
 function approxEqual(a: number, b: number, tol = 1e-6): boolean {
   return Math.abs(a - b) <= tol * Math.max(1, Math.abs(a), Math.abs(b));
 }
 
-describe('advanceStroke matches ama-flow physics', () => {
-  for (const trajectory of PARITY.trajectories) {
+describe.each(PARITY_BY_CANOE)('%s: advanceStroke matches ama-flow physics', (canoe, parity) => {
+  const PRESETS = presetsFor(canoe);
+  for (const trajectory of parity.trajectories) {
     it(`reproduces state_after for every step at seed=${trajectory.seed}`, () => {
       for (const step of trajectory.steps) {
         const actual = advanceStroke(
@@ -57,8 +63,9 @@ describe('advanceStroke matches ama-flow physics', () => {
   }
 });
 
-describe('buildObservation matches ama-flow', () => {
-  for (const trajectory of PARITY.trajectories) {
+describe.each(PARITY_BY_CANOE)('%s: buildObservation matches ama-flow', (canoe, parity) => {
+  const PRESETS = presetsFor(canoe);
+  for (const trajectory of parity.trajectories) {
     it(`reproduces obs_after for every step at seed=${trajectory.seed}`, () => {
       trajectory.steps.forEach((step, i) => {
         const obs = buildObservation(
@@ -77,7 +84,7 @@ describe('buildObservation matches ama-flow', () => {
 });
 
 describe('policyAction matches each trained model', () => {
-  for (const entry of POLICY_ENTRIES) {
+  for (const entry of ALL_POLICY_ENTRIES) {
     it(`${entry.meta.id} agrees with model.predict(obs, deterministic=True) on every parity pair`, () => {
       expect(entry.parity_obs_actions.length).toBeGreaterThan(0);
       for (const { obs, action } of entry.parity_obs_actions) {

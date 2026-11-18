@@ -1,7 +1,11 @@
-// Typed accessors over the exported OC6 presets (ama-flow's `oc6_*_config()`), the single
+// Typed accessors over the exported canoe presets (ama-flow's `canoe_preset()`), the single
 // source of truth for both the Python simulator and this TS port. See ama-flow's
-// ama_flow/export/web.py for how this JSON is produced.
-import presetsData from '../../data/ama-flow/presets.json';
+// ama_flow/export/web.py for how this JSON is produced. A page shows one canoe, named by
+// `<html data-canoe="oc1">` (OC6 when absent), so everything that imports PRESETS gets that canoe's.
+import oc6Data from '../../data/ama-flow/presets.json';
+import oc1Data from '../../data/ama-flow/presets-oc1.json';
+
+export type CanoeId = 'oc6' | 'oc1';
 
 export interface HullConfig {
   mass_kg: number;
@@ -60,9 +64,17 @@ export interface Presets {
   stroke_types: Record<string, number>;
   sides: Record<string, number>;
   initial_speed_mps: number;
+  canoe: CanoeId;
 }
 
-export const PRESETS = presetsData as Presets;
+export function presetsFor(canoe: CanoeId): Presets {
+  return (canoe === 'oc1' ? oc1Data : oc6Data) as Presets;
+}
+
+export const CANOE: CanoeId =
+  typeof document !== 'undefined' && document.documentElement.dataset.canoe === 'oc1' ? 'oc1' : 'oc6';
+
+export const PRESETS = presetsFor(CANOE);
 
 export const Side = { PORT: 0, STARBOARD: 1 } as const;
 export const StrokeType = { FORWARD: 0, DRAW: 1, POKE: 2, RUDDER: 3 } as const;

@@ -44,32 +44,16 @@ export const EPISODE_STROKES = 90; // ~100 s at 1x speed (stroke duration is 1.1
 const LOST_HEADING_DEG = 90;
 const LOST_HEADING_STROKES = 10;
 
-// A short turn-buoy course rather than a straight line, so the boat has to hold two different
-// headings (and therefore use both port and starboard corrective strokes) instead of drifting
-// the same way all race. Leg 1's bearing is 0 deg -- exactly ama-flow's own TARGET_HEADING, so
-// the race starts in the same regime the model was actually benchmarked in, with no artificial
-// transient before the boat has even settled. An earlier version used two 40 deg legs off +x,
-// which put an unnecessary 40 deg offset right at the start on top of the turn -- both
-// transients stacked made the RMS error shown in the HUD/results look far worse than the
-// model's actual steady-state control (which holds within a few degrees on a straight leg).
-//
-// The buoy turn's angle was swept empirically (100 random-seed races per angle):
-//   50 deg: 0 lost, 100 finished, avg RMS 16.0   <- chosen
-//   60 deg: 0 lost, 100 finished, avg RMS 20.0
-//   70 deg: 0 lost,  99 finished, avg RMS 24.2
-//   80 deg: 0 lost,  91 finished, avg RMS 28.6
-// None of these ever lose heading (the model can physically survive up to ~90-110 deg per
-// src/lib/ama-flow/__tests__/waypoint-turn-spike.test.ts), but recovery from a sharp turn takes
-// real strokes -- an 80 deg turn eats so much of the remaining leg that some races time out
-// before reaching the finish, and the transient dominates the RMS the whole way. 50 deg is a
-// real, visible turn that still leaves room to fully recover and finish cleanly.
-// Leg lengths (200m total) are shorter than the ~297m a straight line covers in EPISODE_STROKES:
-// the turn costs real distance (heading error spikes and takes strokes to recover, so less thrust
-// goes to forward progress for a while), confirmed empirically -- a 150m/leg course only reached
-// ~255-257m of its 300m total by stroke 90, finishing well short.
+// One straight 200 m leg at 0 deg -- ama-flow's own TARGET_HEADING, the regime the models were
+// trained and benchmarked in -- so the race compares what the steersmen were built to do: hold a
+// heading in cross-wind and current. An earlier course added a 50 deg buoy turn, but recovering
+// from the turn dominated the result: both steersmen scored an RMS heading error near 16 deg and
+// most races came down to a 1% tiebreak. On the straight leg (200 random-seed races) the median
+// RMS is 2.2 deg for the model and 3.2 deg for the scripted baseline, the model holds the
+// tighter heading in 147 of them, and it reaches the finish gate in all 200 (baseline 197).
+// 200 m takes 52-70 strokes, inside EPISODE_STROKES. The code below still handles several legs.
 const COURSE_LEGS: { bearingDeg: number; lengthM: number }[] = [
-  { bearingDeg: 0, lengthM: 120 },
-  { bearingDeg: -50, lengthM: 80 },
+  { bearingDeg: 0, lengthM: 200 },
 ];
 export const COURSE_WAYPOINTS: [number, number][] = (() => {
   const waypoints: [number, number][] = [];
